@@ -33,11 +33,11 @@ services:
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
     command: >
-        sh -c "uv run python3 manage.py migrate --database=default --verbosity=1 &&
-               uv run python3 manage.py migrate bom --database=bom_db --verbosity=1 &&
-               uv run python3 manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
-               uv run python3 manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
-               uv run python3 manage.py migrate relec --database=relec_db --verbosity=1 &&
+        sh -c "uv run manage.py migrate --database=default --verbosity=1 &&
+               uv run manage.py migrate bom --database=bom_db --verbosity=1 &&
+               uv run manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
+               uv run manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
+               uv run manage.py migrate relec --database=relec_db --verbosity=1 &&
                uv run manage.py runserver 0.0.0.0:8000"
     depends_on:
       db:

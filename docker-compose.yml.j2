@@ -21,12 +21,12 @@ services:
     {% endif %}
 
     command: >
-        sh -c "uv run python3 manage.py migrate --database=default --verbosity=1 &&
-               uv run python3 manage.py migrate bom --database=bom_db --verbosity=1 &&
-               uv run python3 manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
-               uv run python3 manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
-               uv run python3 manage.py migrate relec --database=relec_db --verbosity=1 &&
-               uv run daphne --verbosity=1 -b 0.0.0.0 -p 8000 apiary.asgi:application"
+        sh -c "uv run manage.py migrate --database=default --verbosity=1 &&
+               uv run manage.py migrate bom --database=bom_db --verbosity=1 &&
+               uv run manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
+               uv run manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
+               uv run manage.py migrate relec --database=relec_db --verbosity=1 &&
+               uv run manage.py runserver 0.0.0.0:8000"
     {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
 
     volumes:
