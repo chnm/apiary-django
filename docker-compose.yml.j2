@@ -1,0 +1,68 @@
+# this is a Jinja2 template file used during the Ansible deployment
+# environment specific configuration can be found in our Ansble scripts
+---
+name: {{ compose_stack_name }}
+
+services:
+
+  {{ caddy_svc | indent(width=2, first=True ) }}
+
+  {% set service = (stack.services | selectattr('name', 'eq', 'app') | first) %}
+
+  app:
+    image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
+    restart: unless-stopped
+    {% if service.environment is defined %}
+
+    environment:
+{% for env in service.environment %}
+      - {{ env.key }}={{ env.value }}
+{% endfor %}
+    {% endif %}
+
+    command: >
+        sh -c "uv run python3 manage.py migrate --database=default --verbosity=1 &&
+               uv run python3 manage.py migrate test_app1 --database=test_app1_db --verbosity=1 &&
+               uv run daphne --verbosity=1 -b 0.0.0.0 -p 8000 apiary.asgi:application"
+    {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
+
+    volumes:
+{% for vol in service.volumes %}
+    - {{ vol.host_path if vol.host_path is defined else vol.name }}:{{ vol.container_path }}
+{% endfor %}
+    {% endif %}
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+  {% set service = (stack.services | selectattr('name', 'eq', 'db') | first) %}
+
+  db:
+    image: {{ service.image if service.image is defined else "postgres:latest" }}
+    restart: unless-stopped
+    {% if service.environment is defined %}
+
+    environment:
+{% for env in service.environment %}
+      - {{ env.key }}={{ env.value }}
+{% endfor %}
+    {% endif %}
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ (service.environment | selectattr('key', 'eq', 'POSTGRES_USER')
+ | first).value }}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
+
+    volumes:
+{% for vol in service.volumes %}
+    - {{ vol.host_path if vol.host_path is defined else vol.name }}:{{ vol.container_path }}
+{% endfor %}
+    {% endif %}
+
+volumes:
+  {{ caddy_vols | indent(width=2, first=True ) }}
+  {{ stack | get_all_named_volumes(project_name) | indent(width=2) }}
