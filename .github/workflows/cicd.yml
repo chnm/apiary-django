@@ -1,0 +1,32 @@
+name: "Build and Publish, Deploy Docker Image"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "**"
+      - "!.github/**"
+
+jobs:
+  build-publish:
+    uses: chnm/.github/.github/workflows/django--build-publish.yml@main
+    secrets: inherit
+    with:
+
+      container-registry: "ghcr.io"
+      container-image-name: "apiary-django"
+
+      django-context-root: "."
+
+      website-devl-fqdn: "dev.workspace.apiary.rrchnm.org"
+      website-prod-fqdn: "dev.workspace.apiary.rrchnm.org"
+
+  deploy:
+    uses: chnm/.github/.github/workflows/django--deploy.yml@main
+    needs: [build-publish]
+    secrets: inherit
+    with:
+      website-devl-fqdn: "dev.workspace.apiary.rrchnm.org"
+      website-prod-fqdn: "dev.workspace.apiary.rrchnm.org"
