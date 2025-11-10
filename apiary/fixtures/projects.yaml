@@ -1,0 +1,34 @@
+- model: apiary.project
+  pk: 1
+  fields:
+    name: Death by Numbers
+    app_label: bom
+    description: Lorem ipsum
+- model: apiary.project
+  pk: 2
+  fields:
+    name: Mapping Violence
+    app_label: mappingviolence
+    description: Lorem ipsum
+- model: apiary.project
+  pk: 3
+  fields:
+    name: Connecting Threads
+    app_label: connthreads
+    description: >
+      Connecting Threads is a collaborative digital history project dedicated
+      to amplifying the contributions of Indian weavers and African Caribbean
+      consumers to global histories of dress.
+- model: apiary.project
+  pk: 4
+  fields:
+    name: Religious Ecologies
+    app_label: relec
+    description: >
+      American Religious Ecologies is a project of the Roy Rosenzweig Center
+      for History and New Media that is creating new datasets,
+      maps and visualizations for the history of American religion.
+      With the generous support of the National Endowment for the Humanities,
+      we are currently digitizing the 1926 U.S. Census of Religious Bodies,
+      which has individual schedules for approximately 232,000 congregations.
+      We are also investigating denominational records and other sources of data.

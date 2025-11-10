@@ -48,3 +48,17 @@ class BaseModel(models.Model, metaclass=BaseMeta):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.logger = ModelLoggerAdapter(logger, {'className': cls.__name__})
+
+class Project(BaseModel):
+
+    class Meta:
+        db_table_comment = "Project table"
+
+    app_label = models.CharField(max_length=50)
+    description = models.CharField(max_length=500)
+    name = models.CharField(max_length=50)
+
+    def to_string(self):
+        self.logger.debug("Project.to_string()")
+        return f"{self.app_label}: {self.name} - {self.description}"
+
