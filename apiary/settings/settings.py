@@ -54,8 +54,7 @@ INSTALLED_APPS = [
     'bom',
     'connthreads',
     'mappingviolence',
-    'relec',
-    'relec.locations'
+    'relec'
 ]
 
 MIDDLEWARE = [
