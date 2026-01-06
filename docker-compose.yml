@@ -16,6 +16,9 @@ services:
       - DJANGO_SECRET_KEY=thisisnotasecretkey
       - DJANGO_ALLOWED_HOSTS=localhost
       - DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost
+      - DJANGO_SUPERUSER_EMAIL=PLACEHOLDER
+      - DJANGO_SUPERUSER_USERNAME=PLACEHOLDER
+      - DJANGO_SUPERUSER_PASSWORD=PLACEHOLDER
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=apiary-django
@@ -33,7 +36,8 @@ services:
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
     command: >
-        sh -c "uv run manage.py migrate --database=default --verbosity=1 &&
+        sh -c "uv run manage.py init_superuser &&
+               uv run manage.py migrate --database=default --verbosity=1 &&
                uv run manage.py migrate bom --database=bom_db --verbosity=1 &&
                uv run manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
                uv run manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
