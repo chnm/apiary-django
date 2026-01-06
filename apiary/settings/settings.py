@@ -72,12 +72,6 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-UNFOLD = {
-    "SITE_TITLE": "Apiary",
-    "SITE_HEADER": "Apiary",
-    "SITE_SYMBOL": "speed",
-}
-
 ROOT_URLCONF = "apiary.urls"
 
 TEMPLATES = [
