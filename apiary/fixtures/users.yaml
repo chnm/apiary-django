@@ -1,0 +1,51 @@
+# Users fixture - passwords are hashed with 'changeme123'
+# Generated using: python manage.py shell -c "from django.contrib.auth.hashers import make_password; print(make_password('PASSWORD'))"
+
+# Superuser
+- model: auth.user
+  pk: 1
+  fields:
+    username: admin
+    password: pbkdf2_sha256$1000000$cIhhwxLjO0GtysT2JrM2Yg$IGRxScI4vix2T4YFMATLrnIz8u0/bAkTu7sYPfeK5LE=
+    email: admin@apiary.local
+    first_name: Super
+    last_name: User
+    is_staff: true
+    is_superuser: true
+    is_active: true
+
+# Project Admin
+- model: auth.user
+  pk: 10
+  fields:
+    username: test_admin
+    password: pbkdf2_sha256$1000000$cIhhwxLjO0GtysT2JrM2Yg$IGRxScI4vix2T4YFMATLrnIz8u0/bAkTu7sYPfeK5LE=
+    email: test_admin@apiary.local
+    first_name: Test
+    last_name: Admin
+    is_staff: true
+    is_active: true
+
+# Project Editor
+- model: auth.user
+  pk: 11
+  fields:
+    username: test_editor
+    password: pbkdf2_sha256$1000000$cIhhwxLjO0GtysT2JrM2Yg$IGRxScI4vix2T4YFMATLrnIz8u0/bAkTu7sYPfeK5LE=
+    email: test_editor@apiary.local
+    first_name: Test
+    last_name: Editor
+    is_staff: true
+    is_active: true
+
+# Project Viewer
+- model: auth.user
+  pk: 12
+  fields:
+    username: test_viewer
+    password: pbkdf2_sha256$1000000$cIhhwxLjO0GtysT2JrM2Yg$IGRxScI4vix2T4YFMATLrnIz8u0/bAkTu7sYPfeK5LE=
+    email: test_viewer@apiary.local
+    first_name: Test
+    last_name: Viewer
+    is_staff: true
+    is_active: true

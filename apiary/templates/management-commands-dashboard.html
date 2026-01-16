@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apiary Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        [data-theme="light"],
+        :root:not([data-theme="dark"]) {
+            /* Apiary brand red - matching Unfold colors */
+            --pico-primary: #c32a26;
+            --pico-primary-background: #c32a26;
+            --pico-primary-border: #c32a26;
+            --pico-primary-underline: rgba(195, 42, 38, 0.5);
+            --pico-primary-hover: #a52420;
+            --pico-primary-hover-background: #a52420;
+            --pico-primary-hover-border: #a52420;
+            --pico-primary-hover-underline: rgba(165, 36, 32, 0.75);
+            --pico-primary-focus: rgba(195, 42, 38, 0.125);
+            --pico-primary-inverse: #fff;
+            
+            /* Light red backgrounds for emphasis */
+            --pico-mark-background-color: #fef2f2;
+            --pico-mark-color: #c32a26;
+            
+            /* Form elements accent */
+            --pico-form-element-active-border-color: #c32a26;
+            --pico-form-element-focus-color: #c32a26;
+            --pico-switch-checked-background-color: #c32a26;
+        }
+        
+        .command-output {
+            background: #1f2937;
+            color: #10b981;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        .command-output.error {
+            color: #ef4444;
+        }
+        .brand-link {
+            color: var(--pico-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .brand-link:hover {
+            color: var(--pico-primary-hover);
+        }
+        .command-card {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .command-card header {
+            margin-bottom: 1rem;
+        }
+        .command-card h3 {
+            margin-bottom: 0.25rem;
+        }
+        .command-card p {
+            color: var(--pico-muted-color);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    {% csrf_token %}
+    <main class="container">
+        <hgroup>
+            <h1>Management Commands</h1>
+            <p>run management commands from this web interface</p>
+        </hgroup>
+
+        <article>
+            {% for command_key, command in commands.items %}
+            <div class="command-card">
+                <header>
+                    <h2>{{ command.name }}</h2>
+                    <p>{{ command.description }}</p>
+                </header>
+                
+                {% if command.args %}
+                <form class="command-form" data-command="{{ command_key }}">
+                    {% for arg in command.args %}
+                    <label for="{{ command_key }}_{{ arg.name }}">{{ arg.name|title }}:</label>
+                    <input 
+                        type="{{ arg.type }}" 
+                        id="{{ command_key }}_{{ arg.name }}" 
+                        name="{{ arg.name }}"
+                        value="{{ arg.default }}"
+                        {% if arg.required %}required{% endif %}
+                    />
+                    {% endfor %}
+                    <button type="submit">Run {{ command.name }}</button>
+                </form>
+                {% else %}
+                <button class="run-command-btn" data-command="{{ command_key }}">Run {{ command.name }}</button>
+                {% endif %}
+                
+                <div id="output_{{ command_key }}" class="command-output"></div>
+            </div>
+            {% endfor %}
+        </article>
+
+    </main>
+
+    <script>
+        /**
+         * Execute a management command via AJAX
+         */
+        function runCommand(commandName, formData = {}) {
+            const outputEl = document.getElementById(`output_${commandName}`);
+            const button = document.querySelector(`[data-command="${commandName}"]`);
+            
+            // Prepare button state
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            const originalText = button.textContent;
+            button.textContent = 'Running...';
+            
+            // Show output area
+            outputEl.style.display = 'block';
+            outputEl.classList.remove('error');
+            outputEl.textContent = 'Executing command...';
+            
+            // Build form data
+            const data = new URLSearchParams();
+            data.append('command', commandName);
+            for (const [key, value] of Object.entries(formData)) {
+                data.append(key, value);
+            }
+            
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Execute command
+            fetch('/apiary/run-command/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: data
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    outputEl.classList.remove('error');
+                    outputEl.textContent = '✓ SUCCESS\n\n' + data.output;
+                    if (data.error) {
+                        outputEl.textContent += '\n\nWarnings:\n' + data.error;
+                    }
+                } else {
+                    outputEl.classList.add('error');
+                    outputEl.textContent = '✗ ERROR\n\n' + (data.error || 'Unknown error occurred');
+                }
+            })
+            .catch(error => {
+                outputEl.classList.add('error');
+                outputEl.textContent = '✗ REQUEST FAILED\n\n' + error.message;
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+                button.textContent = originalText;
+            });
+        }
+        
+        // Handle form submissions (commands with arguments)
+        document.querySelectorAll('.command-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const commandName = this.dataset.command;
+                const formData = new FormData(this);
+                const data = Object.fromEntries(formData.entries());
+                runCommand(commandName, data);
+            });
+        });
+        
+        // Handle button clicks (commands without arguments)
+        document.querySelectorAll('.run-command-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const commandName = this.dataset.command;
+                runCommand(commandName);
+            });
+        });
+    </script>
+</body>
+</html>

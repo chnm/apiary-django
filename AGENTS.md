@@ -100,9 +100,11 @@ uv run manage.py dbshell
 # Collect static files
 uv run manage.py collectstatic
 
-# Django extensions (when available)
-uv run manage.py show_urls
-uv run manage.py shell_plus
+# Initialize project groups
+uv run manage.py init_project_groups
+
+# Test command (example)
+uv run manage.py test_command --message "Hello World"
 
 # Lock dependencies
 uv lock
@@ -182,10 +184,10 @@ class YourModel(BaseModel):
 
 **Example:**
 ```python
-class Album(BaseModel):
-    artist = models.ForeignKey(Musician, on_delete=models.CASCADE)
+class Person(BaseModel):
     name = models.CharField(max_length=100)
-    # db_table will be "album" automatically
+    email = models.EmailField()
+    # db_table will be "person" automatically
 ```
 
 ### Admin Customization
@@ -216,7 +218,15 @@ Project metadata stored in `apiary/fixtures/projects.yaml`:
     description: Lorem ipsum
 ```
 
+User fixtures stored in `apiary/fixtures/users.yaml` for development.
+
 Load with: `uv run manage.py loaddata apiary/fixtures/projects.yaml`
+
+### Templates
+
+Custom templates located in `apiary/templates/`:
+- `whoami.html` - User profile page (minimal HTML)
+- `management-commands-dashboard.html` - Management commands interface (Pico.css with Apiary brand colors)
 
 ## Development Patterns
 
@@ -337,6 +347,26 @@ class LocationsConfig(AppConfig):
 
 - Special INTERNAL_IPS hack in `settings_debug_toolbar.py` to work in Docker
 - Uses `__contains__` trick to allow all IPs when DEBUG=True
+- **Restricted to superusers only** via custom `SHOW_TOOLBAR_CALLBACK`
+- Only authenticated superusers will see the debug toolbar
+
+### Custom Decorators
+
+**`@superuser_required` (`apiary/decorators.py`):**
+- Similar to `@staff_member_required` but checks for superuser status
+- Usage: `@superuser_required` or `@superuser_required(login_url='/custom/')`
+- Checks `user.is_active` and `user.is_superuser`
+- Redirects to admin login by default
+
+Example:
+```python
+from apiary.decorators import superuser_required
+
+@superuser_required
+def my_admin_view(request):
+    # Only superusers can access this view
+    pass
+```
 
 ### Logging
 
@@ -353,10 +383,14 @@ class LocationsConfig(AppConfig):
   - Site branding (title, header, symbol)
   - Color theme (primary color: #c32a26)
   - Theme mode forced to light
-  - Sidebar navigation with project-specific sections
+  - Sidebar navigation with project-specific sections and custom Apiary views
   - Tabs configuration for related models
   - Support for django-allauth social accounts
+  - SITE_DROPDOWN placeholder sections (to be customized)
 - Use unfold's forms and ModelAdmin for consistency
+- Sidebar includes links to custom Apiary views:
+  - Profile (`/apiary/whoami/`) - staff only
+  - Management Commands (`/apiary/mgmt/`) - superuser only
 
 ### Python Version
 
@@ -392,7 +426,45 @@ Current URL configuration (`apiary/urls.py`):
 - `/admin/` - Django admin (unfold)
 - `/accounts/` - django-allauth authentication
 - `/api/` - Django REST Framework (currently empty router)
-- `/__debug__/` - Debug toolbar (DEBUG mode only)
+- `/apiary/whoami/` - User profile page (staff only)
+- `/apiary/mgmt/` - Management commands dashboard (superuser only)
+- `/apiary/run-command/` - AJAX endpoint for running management commands (superuser only)
+- `/__debug__/` - Debug toolbar (DEBUG mode + superuser only)
+
+### Apiary Custom Views
+
+**User Profile (`/apiary/whoami/`):**
+- Displays logged-in user information
+- Shows username, email, staff status, superuser status, and groups
+- Restricted to staff members (`@staff_member_required`)
+
+**Management Commands Dashboard (`/apiary/mgmt/`):**
+- Web interface for running whitelisted management commands
+- Uses Pico.css with Apiary brand colors (#c32a26)
+- Commands defined in `ALLOWED_COMMANDS` whitelist in `apiary/views.py`
+- Supports commands with/without arguments
+- Real-time AJAX execution with terminal-style output
+- CSRF protected
+- Restricted to superusers (`@superuser_required`)
+
+**Available Management Commands:**
+- `test_command` - Demo command with customizable message argument
+- `init_superuser` - Idempotent superuser creation
+- `init_project_groups` - Create project-specific user groups
+
+To add new commands, update `ALLOWED_COMMANDS` in `apiary/views.py`:
+```python
+ALLOWED_COMMANDS = {
+    'command_name': {
+        'name': 'Display Name',
+        'description': 'Command description',
+        'args': [
+            {'name': 'arg_name', 'type': 'text', 'default': 'value', 'required': False}
+        ],
+        'timeout': 30
+    },
+}
+```
 
 ## Code Style
 
@@ -474,12 +546,15 @@ This is an active development project for RRCHNM (Roy Rosenzweig Center for Hist
 - ✅ BaseModel with logging
 - ✅ django-unfold admin interface with custom theme
 - ✅ django-allauth authentication (OAuth)
+- ✅ Custom decorators (`@superuser_required`)
+- ✅ User profile page with group membership display
+- ✅ Management commands web dashboard (superuser only)
 - ✅ Idempotent superuser creation management command
+- ✅ Debug toolbar restricted to superusers
 - ✅ Docker deployment setup
 - ✅ CI/CD pipeline
 - ⚠️ Most app models are empty stubs
 - ⚠️ No comprehensive test coverage yet
-- ⚠️ API endpoints not yet implemented
 - ⚠️ API endpoints not yet implemented
 
 When extending functionality, follow existing patterns and maintain the multi-tenant architecture.

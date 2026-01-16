@@ -3,19 +3,22 @@ Django Unfold admin interface settings.
 
 Documentation: https://github.com/unfoldadmin/django-unfold
 """
+from django.urls import reverse_lazy
+
 from .settings import *
 
 UNFOLD = {
     # Site Information
-    "SITE_TITLE": env("UNFOLD_SITE_TITLE", default="Apiary"),
-    "SITE_HEADER": env("UNFOLD_SITE_HEADER", default="Apiary Administration"),
-    "SITE_SYMBOL": env("UNFOLD_SITE_SYMBOL", default="speed"),
+    "SITE_TITLE": "Apiary",
+    "SITE_HEADER": "Apiary Administration",
+    "SITE_SYMBOL": "hive",
     
     # Site URL and Favicon
     "SITE_URL": env("UNFOLD_SITE_URL", default="/"),
     
     # Theme Mode
     "THEME": "light",  # Force light mode ("light" | "dark" | "auto")
+
     # "SITE_ICON": {
     #     "light": lambda request: static("icon-light.svg"),
     #     "dark": lambda request: static("icon-dark.svg"),
@@ -50,31 +53,55 @@ UNFOLD = {
         },
     },
     
+    "SITE_DROPDOWN": [
+        {
+            "icon": "diamond",
+            "title": ("My site"),
+            "link": "https://example.com",
+            "attrs": {
+                "target": "_blank",
+            },
+        },
+        {
+            "icon": "diamond",
+            "title": ("My site"),
+            "link": reverse_lazy("admin:index"),
+        },
+    ],
+    
     # Sidebar Configuration
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,
         "navigation": [
             {
-                "title": "Navigation",
-                "separator": True,
-                "items": [
-                    {
-                        "title": "Dashboard",
-                        "icon": "dashboard",
-                        "link": "/admin/",
-                    },
-                ],
-            },
-            {
                 "title": "Apiary",
                 "separator": True,
                 "collapsible": True,
                 "items": [
                     {
+                        "title": "Overview",
+                        "icon": "dashboard",
+                        "link": "/admin/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": "Profile",
+                        "icon": "account_circle",
+                        "link": lambda request: "/apiary/whoami/",
+                        "permission": lambda request: request.user.is_staff,
+                    },
+                    {
+                        "title": "Management Commands",
+                        "icon": "analytics",
+                        "link": lambda request: "/apiary/mgmt/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
                         "title": "Projects",
                         "icon": "hub",
                         "link": lambda request: "/admin/apiary/project/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                 ],
             },
@@ -85,8 +112,15 @@ UNFOLD = {
                 "items": [
                     {
                         "title": "Overview",
-                        "icon": "monitoring",
+                        "icon": "dashboard",
                         "link": lambda request: "/admin/bom/",
+                        "permission": lambda request: request.user.groups.filter(name='bom-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Bills of Mortality",
+                        "icon": "skull",
+                        "link": lambda request: "/admin/bom/mortalitybill",
+                        "permission": lambda request: request.user.groups.filter(name='bom-viewer').exists() or request.user.is_superuser,
                     },
                 ],
             },
@@ -97,8 +131,15 @@ UNFOLD = {
                 "items": [
                     {
                         "title": "Overview",
-                        "icon": "timeline",
+                        "icon": "dashboard",
                         "link": lambda request: "/admin/connthreads/",
+                        "permission": lambda request: request.user.groups.filter(name='connthreads-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Textiles",
+                        "icon": "checkroom",
+                        "link": lambda request: "/admin/connthreads/textile/",
+                        "permission": lambda request: request.user.groups.filter(name='connthreads-viewer').exists() or request.user.is_superuser,
                     },
                 ],
             },
@@ -109,8 +150,15 @@ UNFOLD = {
                 "items": [
                     {
                         "title": "Overview",
-                        "icon": "map",
+                        "icon": "dashboard",
                         "link": lambda request: "/admin/mappingviolence/",
+                        "permission": lambda request: request.user.groups.filter(name='mappingviolence-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Witnesses",
+                        "icon": "gavel",
+                        "link": lambda request: "/admin/mappingviolence/witness/",
+                        "permission": lambda request: request.user.groups.filter(name='mappingviolence-viewer').exists() or request.user.is_superuser,
                     },
                 ],
             },
@@ -121,8 +169,21 @@ UNFOLD = {
                 "items": [
                     {
                         "title": "Overview",
-                        "icon": "church",
+                        "icon": "dashboard",
                         "link": lambda request: "/admin/relec/",
+                        "permission": lambda request: request.user.groups.filter(name='relec-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Denominations",
+                        "icon": "church",
+                        "link": lambda request: "/admin/relec/denomination/",
+                        "permission": lambda request: request.user.groups.filter(name='relec-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Schedules",
+                        "icon": "assignment",
+                        "link": lambda request: "/admin/relec/schedule/",
+                        "permission": lambda request: request.user.groups.filter(name='relec-viewer').exists() or request.user.is_superuser,
                     },
                 ],
             },
@@ -135,31 +196,37 @@ UNFOLD = {
                         "title": "Users",
                         "icon": "person",
                         "link": lambda request: "/admin/auth/user/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Groups",
                         "icon": "group",
                         "link": lambda request: "/admin/auth/group/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Social Accounts",
                         "icon": "account_circle",
                         "link": lambda request: "/admin/socialaccount/socialaccount/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Social Apps",
                         "icon": "apps",
                         "link": lambda request: "/admin/socialaccount/socialapp/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Social App Tokens",
                         "icon": "apps",
                         "link": lambda request: "/admin/socialaccount/socialtoken/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "User Sessions",
                         "icon": "vpn_key",
                         "link": lambda request: "/admin/sessions/session/",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                 ],
             },
@@ -181,6 +248,55 @@ UNFOLD = {
                 {
                     "title": "Groups",
                     "link": "/admin/auth/group/",
+                },
+            ],
+        },
+        {
+            "models": [
+                "bom.mortalitybill",
+            ],
+            "items": [
+                {
+                    "title": "Mortality Bills",
+                    "link": "/admin/bom/mortalitybill/",
+                },
+            ],
+        },
+        {
+            "models": [
+                "connthreads.textile",
+            ],
+            "items": [
+                {
+                    "title": "Textiles",
+                    "link": "/admin/connthreads/textile/",
+                },
+            ],
+        },
+        {
+            "models": [
+                "mappingviolence.witness",
+            ],
+            "items": [
+                {
+                    "title": "Witnesses",
+                    "link": "/admin/mappingviolence/witness/",
+                },
+            ],
+        },
+        {
+            "models": [
+                "relec.denomination",
+                "relec.schedule",
+            ],
+            "items": [
+                {
+                    "title": "Denominations",
+                    "link": "/admin/relec/denomination/",
+                },
+                {
+                    "title": "Schedules",
+                    "link": "/admin/relec/schedule/",
                 },
             ],
         },

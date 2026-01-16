@@ -1,0 +1,392 @@
+[
+    {
+        "model": "connthreads.textile",
+        "pk": 1,
+        "fields": {
+            "year": 1750,
+            "type": "Cotton",
+            "subtype": "Calico",
+            "circulation": 12500
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 2,
+        "fields": {
+            "year": 1751,
+            "type": "Silk",
+            "subtype": "Taffeta",
+            "circulation": 8300
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 3,
+        "fields": {
+            "year": 1752,
+            "type": "Wool",
+            "subtype": "Broadcloth",
+            "circulation": 15600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 4,
+        "fields": {
+            "year": 1753,
+            "type": "Cotton",
+            "subtype": "Muslin",
+            "circulation": 9800
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 5,
+        "fields": {
+            "year": 1754,
+            "type": "Linen",
+            "subtype": "Damask",
+            "circulation": 7200
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 6,
+        "fields": {
+            "year": 1755,
+            "type": "Silk",
+            "subtype": "Brocade",
+            "circulation": 5400
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 7,
+        "fields": {
+            "year": 1756,
+            "type": "Cotton",
+            "subtype": "Chintz",
+            "circulation": 11200
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 8,
+        "fields": {
+            "year": 1757,
+            "type": "Wool",
+            "subtype": "Serge",
+            "circulation": 13800
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 9,
+        "fields": {
+            "year": 1758,
+            "type": "Cotton",
+            "subtype": "Gingham",
+            "circulation": 8900
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 10,
+        "fields": {
+            "year": 1759,
+            "type": "Linen",
+            "subtype": "Holland",
+            "circulation": 6700
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 11,
+        "fields": {
+            "year": 1760,
+            "type": "Silk",
+            "subtype": "Satin",
+            "circulation": 7800
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 12,
+        "fields": {
+            "year": 1761,
+            "type": "Cotton",
+            "subtype": "Dimity",
+            "circulation": 10400
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 13,
+        "fields": {
+            "year": 1762,
+            "type": "Wool",
+            "subtype": "Flannel",
+            "circulation": 12100
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 14,
+        "fields": {
+            "year": 1763,
+            "type": "Cotton",
+            "subtype": "Fustian",
+            "circulation": 9300
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 15,
+        "fields": {
+            "year": 1764,
+            "type": "Linen",
+            "subtype": "Canvas",
+            "circulation": 8600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 16,
+        "fields": {
+            "year": 1765,
+            "type": "Silk",
+            "subtype": "Velvet",
+            "circulation": 6200
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 17,
+        "fields": {
+            "year": 1766,
+            "type": "Cotton",
+            "subtype": "Nankeen",
+            "circulation": 11800
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 18,
+        "fields": {
+            "year": 1767,
+            "type": "Wool",
+            "subtype": "Baize",
+            "circulation": 10900
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 19,
+        "fields": {
+            "year": 1768,
+            "type": "Cotton",
+            "subtype": "Percale",
+            "circulation": 9600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 20,
+        "fields": {
+            "year": 1769,
+            "type": "Linen",
+            "subtype": "Dowlas",
+            "circulation": 7400
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 21,
+        "fields": {
+            "year": 1770,
+            "type": "Silk",
+            "subtype": "Lustring",
+            "circulation": 5900
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 22,
+        "fields": {
+            "year": 1771,
+            "type": "Cotton",
+            "subtype": "Jaconet",
+            "circulation": 10200
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 23,
+        "fields": {
+            "year": 1772,
+            "type": "Wool",
+            "subtype": "Kersey",
+            "circulation": 11400
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 24,
+        "fields": {
+            "year": 1773,
+            "type": "Cotton",
+            "subtype": "Lawn",
+            "circulation": 8700
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 25,
+        "fields": {
+            "year": 1774,
+            "type": "Linen",
+            "subtype": "Buckram",
+            "circulation": 6900
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 26,
+        "fields": {
+            "year": 1775,
+            "type": "Silk",
+            "subtype": "Grosgrain",
+            "circulation": 7100
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 27,
+        "fields": {
+            "year": 1776,
+            "type": "Cotton",
+            "subtype": "Madras",
+            "circulation": 12300
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 28,
+        "fields": {
+            "year": 1777,
+            "type": "Wool",
+            "subtype": "Frieze",
+            "circulation": 9900
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 29,
+        "fields": {
+            "year": 1778,
+            "type": "Cotton",
+            "subtype": "Organdy",
+            "circulation": 8200
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 30,
+        "fields": {
+            "year": 1779,
+            "type": "Linen",
+            "subtype": "Huckaback",
+            "circulation": 7600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 31,
+        "fields": {
+            "year": 1780,
+            "type": "Silk",
+            "subtype": "Crepe",
+            "circulation": 6400
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 32,
+        "fields": {
+            "year": 1781,
+            "type": "Cotton",
+            "subtype": "Toile",
+            "circulation": 11600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 33,
+        "fields": {
+            "year": 1782,
+            "type": "Wool",
+            "subtype": "Melton",
+            "circulation": 10700
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 34,
+        "fields": {
+            "year": 1783,
+            "type": "Cotton",
+            "subtype": "Batiste",
+            "circulation": 9100
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 35,
+        "fields": {
+            "year": 1784,
+            "type": "Linen",
+            "subtype": "Osnaburg",
+            "circulation": 8300
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 36,
+        "fields": {
+            "year": 1785,
+            "type": "Silk",
+            "subtype": "Pongee",
+            "circulation": 5700
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 37,
+        "fields": {
+            "year": 1786,
+            "type": "Cotton",
+            "subtype": "Chambray",
+            "circulation": 10800
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 38,
+        "fields": {
+            "year": 1787,
+            "type": "Wool",
+            "subtype": "Tweed",
+            "circulation": 12600
+        }
+    },
+    {
+        "model": "connthreads.textile",
+        "pk": 39,
+        "fields": {
+            "year": 1788,
+            "type": "Cotton",
+            "subtype": "Poplin",
+            "circulation": 9400
+        }
+    }
+]

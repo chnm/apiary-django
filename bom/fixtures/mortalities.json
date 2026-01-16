@@ -1,0 +1,281 @@
+[
+    {
+        "model": "bom.mortalitybill",
+        "pk": 1,
+        "fields": {
+            "year": 1665,
+            "type": "Plague",
+            "count": 68596
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 2,
+        "fields": {
+            "year": 1666,
+            "type": "Spotted Fever",
+            "count": 1929
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 3,
+        "fields": {
+            "year": 1667,
+            "type": "Consumption",
+            "count": 4808
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 4,
+        "fields": {
+            "year": 1668,
+            "type": "Aged",
+            "count": 2614
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 5,
+        "fields": {
+            "year": 1669,
+            "type": "Childbed",
+            "count": 625
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 6,
+        "fields": {
+            "year": 1670,
+            "type": "Convulsion",
+            "count": 2106
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 7,
+        "fields": {
+            "year": 1671,
+            "type": "Dropsy",
+            "count": 1478
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 8,
+        "fields": {
+            "year": 1672,
+            "type": "Fever",
+            "count": 5319
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 9,
+        "fields": {
+            "year": 1673,
+            "type": "Griping in the Guts",
+            "count": 647
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 10,
+        "fields": {
+            "year": 1674,
+            "type": "Smallpox",
+            "count": 1843
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 11,
+        "fields": {
+            "year": 1675,
+            "type": "Teeth",
+            "count": 2614
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 12,
+        "fields": {
+            "year": 1676,
+            "type": "Thrush",
+            "count": 1121
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 13,
+        "fields": {
+            "year": 1677,
+            "type": "Tissick",
+            "count": 417
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 14,
+        "fields": {
+            "year": 1678,
+            "type": "Worms",
+            "count": 824
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 15,
+        "fields": {
+            "year": 1679,
+            "type": "Suddenly",
+            "count": 207
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 16,
+        "fields": {
+            "year": 1680,
+            "type": "Cancer",
+            "count": 156
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 17,
+        "fields": {
+            "year": 1681,
+            "type": "Bleeding",
+            "count": 89
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 18,
+        "fields": {
+            "year": 1682,
+            "type": "Drowned",
+            "count": 134
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 19,
+        "fields": {
+            "year": 1683,
+            "type": "Murdered",
+            "count": 12
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 20,
+        "fields": {
+            "year": 1684,
+            "type": "Burnt",
+            "count": 8
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 21,
+        "fields": {
+            "year": 1685,
+            "type": "Stone",
+            "count": 298
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 22,
+        "fields": {
+            "year": 1686,
+            "type": "Jaundice",
+            "count": 243
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 23,
+        "fields": {
+            "year": 1687,
+            "type": "Scurvy",
+            "count": 196
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 24,
+        "fields": {
+            "year": 1688,
+            "type": "Rickets",
+            "count": 557
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 25,
+        "fields": {
+            "year": 1689,
+            "type": "Ague",
+            "count": 423
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 26,
+        "fields": {
+            "year": 1690,
+            "type": "Childrens Diseases",
+            "count": 1876
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 27,
+        "fields": {
+            "year": 1691,
+            "type": "Vomiting",
+            "count": 167
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 28,
+        "fields": {
+            "year": 1692,
+            "type": "King's Evil",
+            "count": 382
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 29,
+        "fields": {
+            "year": 1693,
+            "type": "Surfeit",
+            "count": 863
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 30,
+        "fields": {
+            "year": 1694,
+            "type": "Livergrown",
+            "count": 498
+        }
+    },
+    {
+        "model": "bom.mortalitybill",
+        "pk": 31,
+        "fields": {
+            "year": 1695,
+            "type": "Rising of the Lights",
+            "count": 397
+        }
+    }
+]

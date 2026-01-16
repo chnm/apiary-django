@@ -1,0 +1,322 @@
+[
+    {
+        "model": "relec.denomination",
+        "pk": 1,
+        "fields": {
+            "name": "Methodist Episcopal",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 2,
+        "fields": {
+            "name": "Southern Baptist",
+            "family": "Baptist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 3,
+        "fields": {
+            "name": "Presbyterian Church USA",
+            "family": "Presbyterian"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 4,
+        "fields": {
+            "name": "Roman Catholic",
+            "family": "Catholic"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 5,
+        "fields": {
+            "name": "African Methodist Episcopal",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 6,
+        "fields": {
+            "name": "Protestant Episcopal",
+            "family": "Episcopal"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 7,
+        "fields": {
+            "name": "Lutheran Missouri Synod",
+            "family": "Lutheran"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 8,
+        "fields": {
+            "name": "Disciples of Christ",
+            "family": "Restoration Movement"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 9,
+        "fields": {
+            "name": "Northern Baptist",
+            "family": "Baptist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 10,
+        "fields": {
+            "name": "Congregational",
+            "family": "Congregational"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 11,
+        "fields": {
+            "name": "Methodist Episcopal South",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 12,
+        "fields": {
+            "name": "Church of Christ",
+            "family": "Restoration Movement"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 13,
+        "fields": {
+            "name": "Evangelical Lutheran",
+            "family": "Lutheran"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 14,
+        "fields": {
+            "name": "Quakers",
+            "family": "Friends"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 15,
+        "fields": {
+            "name": "Seventh-day Adventist",
+            "family": "Adventist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 16,
+        "fields": {
+            "name": "African Methodist Episcopal Zion",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 17,
+        "fields": {
+            "name": "Presbyterian Church South",
+            "family": "Presbyterian"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 18,
+        "fields": {
+            "name": "Reformed Church in America",
+            "family": "Reformed"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 19,
+        "fields": {
+            "name": "United Brethren",
+            "family": "United Brethren"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 20,
+        "fields": {
+            "name": "Christian Church",
+            "family": "Restoration Movement"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 21,
+        "fields": {
+            "name": "Mennonite",
+            "family": "Anabaptist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 22,
+        "fields": {
+            "name": "Evangelical Association",
+            "family": "Evangelical"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 23,
+        "fields": {
+            "name": "Church of God",
+            "family": "Holiness"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 24,
+        "fields": {
+            "name": "Free Methodist",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 25,
+        "fields": {
+            "name": "Primitive Baptist",
+            "family": "Baptist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 26,
+        "fields": {
+            "name": "Cumberland Presbyterian",
+            "family": "Presbyterian"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 27,
+        "fields": {
+            "name": "Wesleyan Methodist",
+            "family": "Methodist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 28,
+        "fields": {
+            "name": "Church of the Nazarene",
+            "family": "Holiness"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 29,
+        "fields": {
+            "name": "Pentecostal Holiness",
+            "family": "Pentecostal"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 30,
+        "fields": {
+            "name": "Assemblies of God",
+            "family": "Pentecostal"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 31,
+        "fields": {
+            "name": "Moravian",
+            "family": "Moravian"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 32,
+        "fields": {
+            "name": "Christian Science",
+            "family": "New Thought"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 33,
+        "fields": {
+            "name": "Unitarian",
+            "family": "Unitarian"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 34,
+        "fields": {
+            "name": "Jewish Orthodox",
+            "family": "Jewish"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 35,
+        "fields": {
+            "name": "Jewish Reform",
+            "family": "Jewish"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 36,
+        "fields": {
+            "name": "Buddhist",
+            "family": "Buddhist"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 37,
+        "fields": {
+            "name": "Hindu",
+            "family": "Hindu"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 38,
+        "fields": {
+            "name": "Bah\u00e1'\u00ed",
+            "family": "Bah\u00e1'\u00ed"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 39,
+        "fields": {
+            "name": "Islamic",
+            "family": "Islamic"
+        }
+    },
+    {
+        "model": "relec.denomination",
+        "pk": 40,
+        "fields": {
+            "name": "Latter-day Saints",
+            "family": "Mormon"
+        }
+    }
+]
