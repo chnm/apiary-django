@@ -6,6 +6,8 @@ from django.contrib.auth.models import User, Group
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from unfold.admin import ModelAdmin
 
+from .models import Project
+
 
 admin.site.unregister(User)
 admin.site.unregister(Group)
@@ -22,3 +24,9 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 @admin.register(Group)
 class GroupAdmin(BaseGroupAdmin, ModelAdmin):
     pass
+
+@admin.register(Project)
+class ProjectAdmin(ModelAdmin):
+    list_display = ['name', 'app_label', 'description']
+    search_fields = ['name', 'app_label']
+    list_filter = ['app_label']

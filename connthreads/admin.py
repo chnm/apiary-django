@@ -1,3 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
+from .models import Textile
 
-# Register your models here.
+
+@admin.register(Textile)
+class TextileAdmin(ModelAdmin):
+    list_display = ['year', 'type', 'subtype', 'circulation']
+    list_filter = ['year', 'type', 'subtype']
+    search_fields = ['type', 'subtype']
+    ordering = ['-year', 'type']

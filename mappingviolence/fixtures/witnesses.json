@@ -1,0 +1,464 @@
+[
+    {
+        "model": "mappingviolence.witness",
+        "pk": 1,
+        "fields": {
+            "name": "John Smith",
+            "testimony_date": "1866-03-15",
+            "crime": "Murder",
+            "claim": "Witnessed shooting on Main Street",
+            "notes": "Reliable witness"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 2,
+        "fields": {
+            "name": "Mary Johnson",
+            "testimony_date": "1866-04-22",
+            "crime": "Assault",
+            "claim": "Saw attack near courthouse",
+            "notes": "Present at scene"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 3,
+        "fields": {
+            "name": "Robert Davis",
+            "testimony_date": "1866-05-10",
+            "crime": "Robbery",
+            "claim": "Store theft at gunpoint",
+            "notes": "Store owner"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 4,
+        "fields": {
+            "name": "Elizabeth Brown",
+            "testimony_date": "1866-06-18",
+            "crime": "Arson",
+            "claim": "Barn fire deliberately set",
+            "notes": "Neighbor"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 5,
+        "fields": {
+            "name": "William Wilson",
+            "testimony_date": "1866-07-03",
+            "crime": "Murder",
+            "claim": "Found body in river",
+            "notes": "First responder"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 6,
+        "fields": {
+            "name": "Sarah Martinez",
+            "testimony_date": "1866-08-14",
+            "crime": "Assault",
+            "claim": "Beaten on road to town",
+            "notes": "Victim's sister"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 7,
+        "fields": {
+            "name": "Thomas Anderson",
+            "testimony_date": "1866-09-21",
+            "crime": "Robbery",
+            "claim": "Stage coach robbery",
+            "notes": "Driver"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 8,
+        "fields": {
+            "name": "Margaret Taylor",
+            "testimony_date": "1866-10-08",
+            "crime": "Murder",
+            "claim": "Poisoning at dinner party",
+            "notes": "Guest"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 9,
+        "fields": {
+            "name": "James Moore",
+            "testimony_date": "1866-11-16",
+            "crime": "Assault",
+            "claim": "Fight outside saloon",
+            "notes": "Bartender"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 10,
+        "fields": {
+            "name": "Catherine White",
+            "testimony_date": "1867-01-24",
+            "crime": "Arson",
+            "claim": "Church deliberately burned",
+            "notes": "Parishioner"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 11,
+        "fields": {
+            "name": "George Harris",
+            "testimony_date": "1867-02-12",
+            "crime": "Robbery",
+            "claim": "Bank robbery with violence",
+            "notes": "Clerk"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 12,
+        "fields": {
+            "name": "Emily Clark",
+            "testimony_date": "1867-03-29",
+            "crime": "Murder",
+            "claim": "Stabbing in alley",
+            "notes": "Passerby"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 13,
+        "fields": {
+            "name": "Charles Lewis",
+            "testimony_date": "1867-04-17",
+            "crime": "Assault",
+            "claim": "Mob attack on family",
+            "notes": "Victim"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 14,
+        "fields": {
+            "name": "Anna Robinson",
+            "testimony_date": "1867-05-05",
+            "crime": "Arson",
+            "claim": "House fire set intentionally",
+            "notes": "Neighbor witness"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 15,
+        "fields": {
+            "name": "Henry Walker",
+            "testimony_date": "1867-06-23",
+            "crime": "Robbery",
+            "claim": "Train robbery and assault",
+            "notes": "Conductor"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 16,
+        "fields": {
+            "name": "Lucy Hall",
+            "testimony_date": "1867-07-11",
+            "crime": "Murder",
+            "claim": "Hanging witnessed",
+            "notes": "Town resident"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 17,
+        "fields": {
+            "name": "Edward Allen",
+            "testimony_date": "1867-08-19",
+            "crime": "Assault",
+            "claim": "Whipping in public square",
+            "notes": "Present"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 18,
+        "fields": {
+            "name": "Frances Young",
+            "testimony_date": "1867-09-27",
+            "crime": "Arson",
+            "claim": "Mill fire deliberately set",
+            "notes": "Mill worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 19,
+        "fields": {
+            "name": "Samuel King",
+            "testimony_date": "1867-10-14",
+            "crime": "Robbery",
+            "claim": "Farm animals stolen",
+            "notes": "Farmer"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 20,
+        "fields": {
+            "name": "Martha Wright",
+            "testimony_date": "1867-11-22",
+            "crime": "Murder",
+            "claim": "Shooting at church",
+            "notes": "Congregation member"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 21,
+        "fields": {
+            "name": "Joseph Lopez",
+            "testimony_date": "1868-01-08",
+            "crime": "Assault",
+            "claim": "Beating near railroad",
+            "notes": "Railroad worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 22,
+        "fields": {
+            "name": "Helen Green",
+            "testimony_date": "1868-02-16",
+            "crime": "Arson",
+            "claim": "Store fire set",
+            "notes": "Store employee"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 23,
+        "fields": {
+            "name": "Daniel Adams",
+            "testimony_date": "1868-03-25",
+            "crime": "Robbery",
+            "claim": "Home invasion and theft",
+            "notes": "Neighbor"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 24,
+        "fields": {
+            "name": "Laura Baker",
+            "testimony_date": "1868-04-13",
+            "crime": "Murder",
+            "claim": "Drowning in creek",
+            "notes": "Found body"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 25,
+        "fields": {
+            "name": "Andrew Nelson",
+            "testimony_date": "1868-05-21",
+            "crime": "Assault",
+            "claim": "Attack on travelers",
+            "notes": "Witness on road"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 26,
+        "fields": {
+            "name": "Ruth Carter",
+            "testimony_date": "1868-06-09",
+            "crime": "Arson",
+            "claim": "Warehouse fire",
+            "notes": "Dock worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 27,
+        "fields": {
+            "name": "Patrick Mitchell",
+            "testimony_date": "1868-07-17",
+            "crime": "Robbery",
+            "claim": "Post office theft",
+            "notes": "Postmaster"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 28,
+        "fields": {
+            "name": "Clara Perez",
+            "testimony_date": "1868-08-24",
+            "crime": "Murder",
+            "claim": "Shot in street",
+            "notes": "Shopkeeper"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 29,
+        "fields": {
+            "name": "Frank Roberts",
+            "testimony_date": "1868-09-12",
+            "crime": "Assault",
+            "claim": "Tarring and feathering",
+            "notes": "Town witness"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 30,
+        "fields": {
+            "name": "Grace Turner",
+            "testimony_date": "1868-10-30",
+            "crime": "Arson",
+            "claim": "School building burned",
+            "notes": "Teacher"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 31,
+        "fields": {
+            "name": "Michael Phillips",
+            "testimony_date": "1868-11-18",
+            "crime": "Robbery",
+            "claim": "Payroll theft",
+            "notes": "Mine worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 32,
+        "fields": {
+            "name": "Dorothy Campbell",
+            "testimony_date": "1869-01-26",
+            "crime": "Murder",
+            "claim": "Ambush on highway",
+            "notes": "Survivor"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 33,
+        "fields": {
+            "name": "Raymond Parker",
+            "testimony_date": "1869-02-14",
+            "crime": "Assault",
+            "claim": "Courthouse attack",
+            "notes": "Deputy"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 34,
+        "fields": {
+            "name": "Rose Evans",
+            "testimony_date": "1869-03-23",
+            "crime": "Arson",
+            "claim": "Hotel fire set",
+            "notes": "Guest"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 35,
+        "fields": {
+            "name": "Albert Edwards",
+            "testimony_date": "1869-04-11",
+            "crime": "Robbery",
+            "claim": "Merchant goods stolen",
+            "notes": "Merchant"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 36,
+        "fields": {
+            "name": "Beatrice Collins",
+            "testimony_date": "1869-05-29",
+            "crime": "Murder",
+            "claim": "Family killed",
+            "notes": "Relative"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 37,
+        "fields": {
+            "name": "Walter Stewart",
+            "testimony_date": "1869-06-16",
+            "crime": "Assault",
+            "claim": "Riot at polling place",
+            "notes": "Voter"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 38,
+        "fields": {
+            "name": "Lillian Sanchez",
+            "testimony_date": "1869-07-24",
+            "crime": "Arson",
+            "claim": "Cotton gin burned",
+            "notes": "Worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 39,
+        "fields": {
+            "name": "Harold Morris",
+            "testimony_date": "1869-08-12",
+            "crime": "Robbery",
+            "claim": "Livestock theft",
+            "notes": "Rancher"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 40,
+        "fields": {
+            "name": "Virginia Rogers",
+            "testimony_date": "1869-09-20",
+            "crime": "Murder",
+            "claim": "Lynching witnessed",
+            "notes": "Town resident"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 41,
+        "fields": {
+            "name": "Arthur Reed",
+            "testimony_date": "1869-10-08",
+            "crime": "Assault",
+            "claim": "Political violence",
+            "notes": "Campaign worker"
+        }
+    },
+    {
+        "model": "mappingviolence.witness",
+        "pk": 42,
+        "fields": {
+            "name": "Mildred Cook",
+            "testimony_date": "1869-11-15",
+            "crime": "Arson",
+            "claim": "Barn fire",
+            "notes": "Farm worker"
+        }
+    }
+]

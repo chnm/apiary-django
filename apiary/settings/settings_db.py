@@ -15,16 +15,20 @@ DATABASES = {
             "options": "-c search_path=public"
         },
     },
+#   "bom_db": {
+#       "ENGINE": "django.db.backends.postgresql",
+#       "HOST": env("DB_HOST", default="localhost"),
+#       "PORT": env("DB_PORT", default="5432"),
+#       "NAME": env("DB_NAME", default="apiary-django"),
+#       "USER": env("DB_USER", default="apiary-django"),
+#       "PASSWORD": env("DB_PASS", default="password"),
+#       "OPTIONS": {
+#           "options": "-c search_path=bom"
+#       },
+#   },
     "bom_db": {
-        "ENGINE": "django.db.backends.postgresql",
-        "HOST": env("DB_HOST", default="localhost"),
-        "PORT": env("DB_PORT", default="5432"),
-        "NAME": env("DB_NAME", default="apiary-django"),
-        "USER": env("DB_USER", default="apiary-django"),
-        "PASSWORD": env("DB_PASS", default="password"),
-        "OPTIONS": {
-            "options": "-c search_path=bom"
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': env('BOM_DB_PATH', default=str(BASE_DIR / 'bom.sqlite3')),
     },
     "connthreads_db": {
         "ENGINE": "django.db.backends.postgresql",

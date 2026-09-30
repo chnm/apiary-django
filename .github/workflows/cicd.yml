@@ -1,32 +1,26 @@
-name: "Build and Publish, Deploy Docker Image"
+name: Django CI and k0s deployment
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - "main"
-    paths:
-      - "**"
-      - "!.github/**"
+    branches: [main]
+    paths-ignore: [k8s/kustomization.yaml]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-publish:
-    uses: chnm/.github/.github/workflows/django--build-publish.yml@main
-    secrets: inherit
+  deployment:
+    permissions:
+      contents: write   # the reusable pins the digest back to this repository
+    uses: chnm/.github/.github/workflows/django--k0s.yml@e3f11d6878c440fc9f716a2b9798880c8e1c7af9 # pinned; bump deliberately
     with:
-
-      container-registry: "ghcr.io"
-      container-image-name: "apiary-django"
-
-      django-context-root: "."
-
-      website-devl-fqdn: "dev.workspace.apiary.rrchnm.org"
-      website-prod-fqdn: "dev.workspace.apiary.rrchnm.org"
-
-  deploy:
-    uses: chnm/.github/.github/workflows/django--deploy.yml@main
-    needs: [build-publish]
-    secrets: inherit
-    with:
-      website-devl-fqdn: "dev.workspace.apiary.rrchnm.org"
-      website-prod-fqdn: "dev.workspace.apiary.rrchnm.org"
+      image: rrchnm/apiary-django
+    secrets:
+      ZOT_TOKEN: ${{ secrets.ZOT_TOKEN }}

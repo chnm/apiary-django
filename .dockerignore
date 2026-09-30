@@ -1,0 +1,16 @@
+.git
+.venv
+graft
+.idea
+.crush
+__pycache__
+*.py[cod]
+*.sqlite3
+*.sqlite3-*
+**/*.sqlite3
+**/*.sqlite3-*
+**/.DS_Store
+.env
+.env.*
+**/mediafiles
+**/staticfiles

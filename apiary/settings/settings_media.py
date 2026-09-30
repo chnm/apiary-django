@@ -1,7 +1,7 @@
 from .settings import *
 
 # Media files
-OBJ_STORAGE = env("OBJ_STORAGE", default=False)
+OBJ_STORAGE = env.bool("OBJ_STORAGE", default=False)
 if OBJ_STORAGE:
     AWS_ACCESS_KEY_ID = env("OBJ_STORAGE_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = env("OBJ_STORAGE_SECRET_ACCESS_KEY")
