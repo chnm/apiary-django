@@ -35,6 +35,30 @@ class DeploymentTests(SimpleTestCase):
         ])
         self.assertTrue(all(call.args[0] == "migrate" for call in migrate.call_args_list))
 
+    def test_workflow_uses_pinned_github_k0s_reusable(self):
+        from pathlib import Path
+
+        import yaml
+
+        root = Path(__file__).resolve().parent.parent
+        workflow = yaml.load(
+            (root / ".github/workflows/cicd.yml").read_text(), Loader=yaml.BaseLoader
+        )
+        deployment = workflow["jobs"]["deployment"]
+        self.assertRegex(
+            deployment["uses"],
+            r"^chnm/\.github/\.github/workflows/django--k0s\.yml@[0-9a-f]{40}$",
+        )
+        self.assertEqual(deployment["with"]["image"], "rrchnm/apiary-django")
+        self.assertEqual(deployment["permissions"]["contents"], "write")
+        self.assertEqual(list(deployment["secrets"]), ["ZOT_TOKEN"])
+        self.assertEqual(workflow["on"]["push"]["branches"], ["main"])
+        self.assertEqual(workflow["on"]["pull_request"]["branches"], ["main"])
+        self.assertEqual(workflow["on"]["push"]["paths-ignore"], ["k8s/kustomization.yaml"])
+        self.assertFalse((root / ".forgejo/workflows/ci.yml").exists())
+        self.assertNotIn("django--deploy.yml", str(workflow))
+        self.assertNotIn("django--build-publish.yml", str(workflow))
+
     def test_environment_false_is_not_truthy_and_persistent_path_is_used(self):
         import os
         import subprocess
