@@ -9,13 +9,22 @@ env = environ.Env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
+DEBUG = env.bool("DEBUG", default=False)
 SECRET_KEY = env(
     "DJANGO_SECRET_KEY",
-    default="django-insecure-j0ooyy9thm4g#k%9%16egn(y(un=e)h^6j7xy5*9plt+=pzao3"
+    **({"default": "django-insecure-dev-only"} if DEBUG else {}),
 )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG", default=False)
+# Only the trusted Gateway supplies this header; pods are not publicly exposed.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
+# Subdomain and preload scope belong to the parent domain owner.
+SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
@@ -59,6 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -102,7 +112,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Storage backend
 STORAGES = {
@@ -110,7 +121,7 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 

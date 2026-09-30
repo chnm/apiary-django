@@ -1,0 +1,45 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels: { app: migrate }
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: oci.rrchnm.internal/rrchnm/apiary-django
+          command: ["python", "manage.py", "migrate_projects"]
+          envFrom:
+            - configMapRef: { name: apiary-env }
+            - secretRef: { name: apiary-django }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            - { name: bom, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: bom
+          persistentVolumeClaim: { claimName: bom }
+        - { name: tmp, emptyDir: {} }

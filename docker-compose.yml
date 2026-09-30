@@ -23,7 +23,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=apiary-django
       - DB_USER=apiary-django
-      - DB_PASSWORD=password
+      - DB_PASS=password
       - ALLAUTH_ORCID_CLIENT_ID=PLACEHOLDER
       - ALLAUTH_ORCID_CLIENT_SECRET=PLACEHOLDER
       - ALLAUTH_GITHUB_CLIENT_ID=PLACEHOLDER

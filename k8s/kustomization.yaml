@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: apiary
+resources:
+  - quota.yaml
+  - netpol.yaml
+  - externalsecret.yaml
+  - postgres.yaml
+  - migrate.yaml
+  - app.yaml
+  - httproute.yaml
+configMapGenerator:
+  - name: apiary-env
+    literals:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=apiary-django
+      - DB_USER=apiary-django
+      - BOM_DB_PATH=/data/bom.sqlite3
+      - OBJ_STORAGE=True
+      - DJANGO_ALLOWED_HOSTS=workspace.apiary.rrchnm.org
+      - DJANGO_CSRF_TRUSTED_ORIGINS=https://workspace.apiary.rrchnm.org
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "-2"
+# CI replaces this bootstrap digest. Do not activate Argo before the first build.
+images:
+  - name: oci.rrchnm.internal/rrchnm/apiary-django
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

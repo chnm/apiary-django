@@ -5,10 +5,12 @@ from django.urls import path, include
 from django.conf import settings
 
 from apiary import views
+from apiary.health import health
 
 router = DefaultRouter()
 
 urlpatterns = [
+    path("health/", health),
     path("admin/", admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('api/', include(router.urls)),

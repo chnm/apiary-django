@@ -28,7 +28,7 @@ DATABASES = {
 #   },
     "bom_db": {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'bom.sqlite3',
+        'NAME': env('BOM_DB_PATH', default=str(BASE_DIR / 'bom.sqlite3')),
     },
     "connthreads_db": {
         "ENGINE": "django.db.backends.postgresql",
