@@ -19,7 +19,7 @@ jobs:
   deployment:
     permissions:
       contents: write   # the reusable pins the digest back to this repository
-    uses: chnm/.github/.github/workflows/django--k0s.yml@e3f11d6878c440fc9f716a2b9798880c8e1c7af9 # pinned; bump deliberately
+    uses: chnm/.github/.github/workflows/django--k0s.yml@@3ba45c85c59682e7b0acade498f880cd9ab0186f # pinned; bump deliberately
     with:
       image: rrchnm/apiary-django
     secrets:
