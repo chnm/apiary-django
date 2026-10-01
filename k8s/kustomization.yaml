@@ -18,8 +18,8 @@ configMapGenerator:
   - DB_USER=apiary-django
   - BOM_DB_PATH=/data/bom.sqlite3
   - OBJ_STORAGE=True
-  - DJANGO_ALLOWED_HOSTS=workspace.apiary.rrchnm.org
-  - DJANGO_CSRF_TRUSTED_ORIGINS=https://workspace.apiary.rrchnm.org
+  - DJANGO_ALLOWED_HOSTS=workspaces.apiary.rrchnm.org
+  - DJANGO_CSRF_TRUSTED_ORIGINS=https://workspaces.apiary.rrchnm.org
   name: apiary-env
   options:
     annotations:

@@ -32,7 +32,7 @@ spec:
       k8s:app: apiary
   egress:
     - toFQDNs:
-        - { matchName: dev.obj.rrchnm.org }
+        - { matchName: obj.rrchnm.org }
         - { matchName: orcid.org }
         - { matchName: api.orcid.org }
         - { matchName: pub.orcid.org }

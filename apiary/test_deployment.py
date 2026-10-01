@@ -67,7 +67,7 @@ class DeploymentTests(SimpleTestCase):
         environment = {
             **os.environ, "DEBUG": "False", "OBJ_STORAGE": "False",
             "DJANGO_SECRET_KEY": "test-only", "BOM_DB_PATH": "/data/bom.sqlite3",
-            "DJANGO_CSRF_TRUSTED_ORIGINS": "https://workspace.apiary.rrchnm.org",
+            "DJANGO_CSRF_TRUSTED_ORIGINS": "https://workspaces.apiary.rrchnm.org",
         }
         subprocess.run([sys.executable, "-c", """
 import django
@@ -78,5 +78,5 @@ assert settings.OBJ_STORAGE is False
 assert settings.SESSION_COOKIE_SECURE
 assert settings.CSRF_COOKIE_SECURE
 assert settings.DATABASES["bom_db"]["NAME"] == "/data/bom.sqlite3"
-assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspace.apiary.rrchnm.org"]
+assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 """], env={**environment, "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)

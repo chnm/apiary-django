@@ -47,7 +47,7 @@ spec:
               path: /health/
               port: http
               httpHeaders:
-                - { name: Host, value: workspace.apiary.rrchnm.org }
+                - { name: Host, value: workspaces.apiary.rrchnm.org }
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
