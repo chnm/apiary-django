@@ -29,5 +29,5 @@ configMapGenerator:
       argocd.argoproj.io/sync-wave: "-2"
 # CI replaces this bootstrap digest. Do not activate Argo before the first build.
 images:
-- digest: sha256:968d344ef17acf0713ad460628eb48f646ca3ac7b8cbaa0300321cb05f2690eb
+- digest: sha256:3fca0d71fabc805b4f7cce8974951a0c052f1fbf18fea8539b5754b75d57c6bf
   name: oci.rrchnm.internal/rrchnm/apiary-django
