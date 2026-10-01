@@ -14,7 +14,7 @@ spec:
       namespace: platform
       sectionName: https
   hostnames:
-    - workspace.apiary.rrchnm.org
+    - workspaces.apiary.rrchnm.org
   rules:
     - matches:
         - path: { type: PathPrefix, value: / }
