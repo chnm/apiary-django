@@ -7,6 +7,10 @@ if OBJ_STORAGE:
     AWS_SECRET_ACCESS_KEY = env("OBJ_STORAGE_SECRET_ACCESS_KEY")
     AWS_STORAGE_BUCKET_NAME = env("OBJ_STORAGE_BUCKET_NAME")
     AWS_S3_ENDPOINT_URL = env("OBJ_STORAGE_ENDPOINT_URL")
+    # Garage signs requests with its own region name and serves dotted bucket
+    # names only with path-style addressing.
+    AWS_S3_REGION_NAME = env("OBJ_STORAGE_REGION", default=None)
+    AWS_S3_ADDRESSING_STYLE = "path"
 
     MEDIA_URL = f"{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/"
 

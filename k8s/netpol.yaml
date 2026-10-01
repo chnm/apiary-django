@@ -31,8 +31,14 @@ spec:
     matchLabels:
       k8s:app: apiary
   egress:
+    # Garage S3 API nodes (obj.rrchnm.internal); plaintext on the internal LAN.
+    - toCIDRSet:
+        - cidr: 10.112.113.223/32   # brahma
+        - cidr: 10.112.12.225/32    # vishnu
+        - cidr: 10.112.12.224/32    # shiva
+      toPorts:
+        - ports: [{ port: "3900", protocol: TCP }]
     - toFQDNs:
-        - { matchName: obj.rrchnm.org }
         - { matchName: orcid.org }
         - { matchName: api.orcid.org }
         - { matchName: pub.orcid.org }
