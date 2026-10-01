@@ -80,3 +80,31 @@ assert settings.CSRF_COOKIE_SECURE
 assert settings.DATABASES["bom_db"]["NAME"] == "/data/bom.sqlite3"
 assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 """], env={**environment, "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
+
+    def test_init_superuser_creates_once_and_never_resets_an_existing_account(self):
+        from io import StringIO
+
+        User = MagicMock()
+        credentials = {"DJANGO_SUPERUSER_USERNAME": "ops", "DJANGO_SUPERUSER_PASSWORD": "pw"}
+        with patch("apiary.management.commands.init_superuser.get_user_model", return_value=User):
+            with patch.dict("os.environ", {}, clear=True):
+                call_command("init_superuser", stdout=StringIO())
+            User.objects.filter.assert_not_called()
+
+            with patch.dict("os.environ", credentials, clear=True):
+                User.objects.filter.return_value.exists.return_value = False
+                call_command("init_superuser", stdout=StringIO())
+                User.objects.create_superuser.assert_called_once_with(username="ops", email="", password="pw")
+
+                User.objects.filter.return_value.exists.return_value = True
+                call_command("init_superuser", stdout=StringIO())
+        self.assertEqual(User.objects.create_superuser.call_count, 1)
+
+    def test_migrate_job_bootstraps_the_superuser_after_migrations(self):
+        from pathlib import Path
+
+        import yaml
+
+        job = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/migrate.yaml").read_text())
+        command = job["spec"]["template"]["spec"]["containers"][0]["command"]
+        self.assertEqual(command[-1], "python manage.py migrate_projects && python manage.py init_superuser")
