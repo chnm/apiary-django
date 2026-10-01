@@ -1,10 +1,15 @@
 """
 Apiary application views.
 """
+import posixpath
 import subprocess
 import sys
 import json
 from pathlib import Path
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.core.files.storage import storages
+from django.http import FileResponse, Http404
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -21,6 +26,12 @@ ALLOWED_COMMANDS = {
             {'name': 'message', 'type': 'text', 'default': 'Hello from test command!', 'required': False}
         ],
         'timeout': 30
+    },
+    'check_storage': {
+        'name': 'Check Media Storage',
+        'description': 'Write, read, serve and delete a probe file in public and private storage',
+        'args': [],
+        'timeout': 60
     },
     'init_project_groups': {
         'name': 'Initialize Project Groups',
@@ -122,3 +133,29 @@ def run_management_command(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+MEDIA_STORAGES = {"public": "public", "private": "default"}
+
+
+def media(request, visibility, path):
+    """
+    Serve a stored file. Public files are open to anyone; a private file needs a
+    permission in the app named by its first path segment (e.g. private/bom/...).
+    """
+    if visibility == "private":
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not request.user.has_module_perms(path.split("/", 1)[0]):
+            raise PermissionDenied
+    storage = storages[MEDIA_STORAGES[visibility]]
+    try:
+        if not storage.exists(path):
+            raise Http404
+        response = FileResponse(storage.open(path), filename=posixpath.basename(path))
+    except SuspiciousOperation:
+        raise Http404
+    response["Cache-Control"] = "public, max-age=3600" if visibility == "public" else "private, no-store"
+    # Uploads are served from the app's own origin; never let one run script there.
+    response["Content-Security-Policy"] = "sandbox"
+    return response

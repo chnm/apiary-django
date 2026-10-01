@@ -341,6 +341,24 @@ class LocationsConfig(AppConfig):
 - Uses boto3 + django-storages
 - See `settings_media.py` for configuration
 
+Two media storages, both served by the app at `/media/<public|private>/...`
+(`apiary.views.media`), because Garage's S3 endpoint is internal-only:
+
+- `storages["public"]`: anyone can read.
+- `storages["default"]` (private): readable by superusers and users with any
+  permission in the app named by the file's first path segment, so upload
+  private files under `<app_label>/...` (e.g. `upload_to="bom/"`).
+
+```python
+from apiary.storage import public_storage
+
+scan = models.FileField(upload_to="bom/scans/")                     # private
+image = models.ImageField(upload_to="bom/", storage=public_storage)  # public
+```
+
+Files are served with `Content-Security-Policy: sandbox`. Check both storages
+with `uv run manage.py check_storage`; it is also on the management dashboard.
+
 ### Debug Toolbar in Docker
 
 - Special INTERNAL_IPS hack in `settings_debug_toolbar.py` to work in Docker
