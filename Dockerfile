@@ -32,4 +32,4 @@ USER 10001:10001
 EXPOSE 8000
 # The StageX base sets ENTRYPOINT to python, which would wrap the CMD below.
 ENTRYPOINT []
-CMD ["gunicorn", "apiary.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--max-requests", "1000", "--access-logfile", "-", "--error-logfile", "-", "--no-control-socket"]
+CMD ["gunicorn", "apiary.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--worker-class", "gthread", "--threads", "8", "--max-requests", "1000", "--access-logfile", "-", "--error-logfile", "-", "--no-control-socket"]

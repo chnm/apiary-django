@@ -98,6 +98,12 @@ UNFOLD = {
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
+                        "title": "System Status",
+                        "icon": "monitor_heart",
+                        "link": lambda request: "/apiary/status/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
                         "title": "Projects",
                         "icon": "hub",
                         "link": lambda request: "/admin/apiary/project/",
