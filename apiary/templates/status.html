@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apiary System Status</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --pico-primary: #c32a26;
+            --pico-primary-background: #c32a26;
+            --pico-primary-border: #c32a26;
+            --pico-primary-hover: #a52420;
+            --pico-primary-hover-background: #a52420;
+            --pico-switch-checked-background-color: #c32a26;
+        }
+        .badge { font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 4px; }
+        .ok { background: #dcfce7; color: #166534; }
+        .fail { background: #fef2f2; color: #c32a26; }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        #transport { font-family: monospace; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>System Status <span id="overall" class="badge"></span></h1>
+            <p>Live health of this pod's databases and media storage</p>
+        </hgroup>
+
+        <fieldset>
+            <legend>Update by</legend>
+            <label><input type="radio" name="mode" value="poll" checked> Polling (fetch <code>status.json</code> every 5s)</label>
+            <label><input type="radio" name="mode" value="stream"> Server-sent events (<code>status/stream/</code>)</label>
+        </fieldset>
+        <p id="transport" aria-live="polite"></p>
+
+        <article>
+            <header><strong>App</strong></header>
+            <table><tbody id="app"></tbody></table>
+        </article>
+        <article>
+            <header><strong>Databases</strong></header>
+            <table>
+                <thead><tr><th>Alias</th><th>Engine</th><th>Status</th><th class="num">Latency</th></tr></thead>
+                <tbody id="databases"></tbody>
+            </table>
+        </article>
+        <article>
+            <header><strong>Media storage</strong></header>
+            <table>
+                <thead><tr><th>Storage</th><th>Status</th><th class="num">Latency</th></tr></thead>
+                <tbody id="media"></tbody>
+            </table>
+        </article>
+    </main>
+
+    {{ snapshot|json_script:"initial-snapshot" }}
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const cell = (text, cls) => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            if (cls) td.className = cls;
+            return td;
+        };
+        const statusCell = (check) => {
+            const td = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = 'badge ' + (check.ok ? 'ok' : 'fail');
+            badge.textContent = check.ok ? 'OK' : (check.error || 'FAIL');
+            td.append(badge);
+            return td;
+        };
+        const fillRows = (tbody, rows) => {
+            tbody.replaceChildren(...rows.map((cells) => {
+                const tr = document.createElement('tr');
+                tr.append(...cells);
+                return tr;
+            }));
+        };
+
+        function render(s) {
+            const overall = $('overall');
+            overall.className = 'badge ' + (s.ok ? 'ok' : 'fail');
+            overall.textContent = s.ok ? 'Healthy' : 'Degraded';
+            fillRows($('app'), [
+                ['Commit', s.app.commit], ['Pod', s.app.pod], ['Worker PID', s.app.pid],
+                ['Worker uptime', s.app.uptime_s + 's'], ['Python', s.app.python],
+                ['Django', s.app.django], ['Snapshot', s.generated_at],
+            ].map(([k, v]) => [cell(k), cell(String(v))]));
+            fillRows($('databases'), Object.entries(s.databases).map(([alias, c]) =>
+                [cell(alias), cell(c.vendor), statusCell(c), cell(c.ms + ' ms', 'num')]));
+            fillRows($('media'), Object.entries(s.media).map(([name, c]) =>
+                [cell(name), statusCell(c), cell(c.ms + ' ms', 'num')]));
+        }
+
+        let timer = null, source = null, updates = 0, connections = 0;
+        const note = (text) => { $('transport').textContent = text; };
+
+        function stop() {
+            clearInterval(timer);
+            if (source) source.close();
+            timer = source = null;
+        }
+
+        // Polling: a new short request each time; works through any proxy.
+        function startPolling() {
+            const tick = () => fetch('{% url "apiary_status_json" %}', { credentials: 'same-origin' })
+                .then((r) => r.json())
+                .then((s) => { render(s); note(`polling · request #${++updates} · ${s.generated_at}`); })
+                .catch((e) => note(`polling · request failed: ${e.message}`));
+            tick();
+            timer = setInterval(tick, 5000);
+        }
+
+        // SSE: one response carries several snapshots; the server ends it after ~10s
+        // and EventSource reconnects by itself using the server's `retry:` hint.
+        function startStreaming() {
+            source = new EventSource('{% url "apiary_status_stream" %}');
+            source.onopen = () => { connections++; };
+            source.onmessage = (e) => {
+                const s = JSON.parse(e.data);
+                render(s);
+                note(`streaming · event #${++updates} on connection #${connections} · ${s.generated_at}`);
+            };
+            source.onerror = () => note(`streaming · stream ended, reconnecting (connection #${connections})`);
+        }
+
+        document.querySelectorAll('input[name=mode]').forEach((input) =>
+            input.addEventListener('change', () => {
+                stop();
+                updates = connections = 0;
+                input.value === 'stream' ? startStreaming() : startPolling();
+            }));
+
+        render(JSON.parse($('initial-snapshot').textContent));
+        startPolling();
+    </script>
+</body>
+</html>

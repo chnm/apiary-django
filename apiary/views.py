@@ -3,19 +3,21 @@ Apiary application views.
 """
 import posixpath
 import subprocess
+import time
 import sys
 import json
 from pathlib import Path
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.storage import storages
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from apiary.decorators import superuser_required
+from apiary.status import snapshot
 
 # Whitelist of allowed management commands with their configurations
 ALLOWED_COMMANDS = {
@@ -158,4 +160,40 @@ def media(request, visibility, path):
     response["Cache-Control"] = "public, max-age=3600" if visibility == "public" else "private, no-store"
     # Uploads are served from the app's own origin; never let one run script there.
     response["Content-Security-Policy"] = "sandbox"
+    return response
+
+
+@superuser_required
+def status_page(request):
+    """Live system status, refreshed by polling status_json or streaming status_stream."""
+    return render(request, 'status.html', {'snapshot': snapshot()})
+
+
+@superuser_required
+def status_json(request):
+    """Polling: the page fetches one snapshot every few seconds."""
+    return JsonResponse(snapshot())
+
+
+STATUS_STREAM_EVENTS = 5
+STATUS_STREAM_INTERVAL = 2
+
+
+@superuser_required
+def status_stream(request):
+    """
+    Server-sent events: one open response carrying a snapshot every few seconds.
+
+    Each stream ends after about ten seconds, inside the gateway's response timeout
+    and without pinning a gunicorn thread; EventSource reconnects on its own.
+    """
+    def events():
+        yield f"retry: {STATUS_STREAM_INTERVAL * 1000}\n\n"
+        for i in range(STATUS_STREAM_EVENTS):
+            if i:
+                time.sleep(STATUS_STREAM_INTERVAL)
+            yield f"data: {json.dumps(snapshot())}\n\n"
+
+    response = StreamingHttpResponse(events(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
     return response
