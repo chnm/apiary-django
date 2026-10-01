@@ -46,10 +46,8 @@ uv run manage.py loaddata apiary/fixtures/projects.yaml
 # Run development server
 uv run manage.py runserver
 
-# Create superuser (idempotent management command)
-uv run manage.py init_superuser
-
-# Or with custom credentials via environment variables
+# Create superuser if missing (idempotent; skips when username/password are unset,
+# never changes an existing account). The k8s migrate Job runs it on every sync.
 DJANGO_SUPERUSER_USERNAME=admin \
 DJANGO_SUPERUSER_EMAIL=admin@example.com \
 DJANGO_SUPERUSER_PASSWORD=secret \
@@ -137,7 +135,7 @@ All settings modules are imported in `apiary/settings/__init__.py`.
 - `ALLAUTH_*_CLIENT_ID` and `ALLAUTH_*_CLIENT_SECRET` - OAuth providers
 - `OBJ_STORAGE*` - S3-compatible object storage configuration
 - `UNFOLD_SITE_TITLE`, `UNFOLD_SITE_HEADER`, `UNFOLD_SITE_SYMBOL` - Admin interface branding
-- `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD` - Superuser credentials for init_superuser command
+- `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD` - Superuser credentials for init_superuser (in k8s, from the `eso/apiary-django` OpenBao secret)
 
 ### Multi-Database Architecture
 

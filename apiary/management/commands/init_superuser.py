@@ -5,25 +5,25 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Create a superuser if one doesn't exist (idempotent)"
+    help = "Create the DJANGO_SUPERUSER_USERNAME superuser if it doesn't exist (idempotent)"
 
     def handle(self, *args, **options):
-        User = get_user_model()
-        
-        username = os.environ.get('DJANGO_SUPERUSER_USERNAME', 'admin')
-        email = os.environ.get('DJANGO_SUPERUSER_EMAIL', 'admin@example.com')
-        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD', 'admin')
-        
-        if User.objects.filter(username=username).exists():
-            self.stdout.write(
-                self.style.WARNING(f'Superuser "{username}" already exists')
-            )
+        username = os.environ.get('DJANGO_SUPERUSER_USERNAME')
+        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD')
+        if not (username and password):
+            self.stdout.write('DJANGO_SUPERUSER_USERNAME/PASSWORD not set; skipping')
             return
-        
+
+        User = get_user_model()
+        # Never touch an existing account, so a password changed in the admin survives redeploys.
+        if User.objects.filter(username=username).exists():
+            self.stdout.write(f'Superuser "{username}" already exists')
+            return
+
         User.objects.create_superuser(
             username=username,
-            email=email,
-            password=password
+            email=os.environ.get('DJANGO_SUPERUSER_EMAIL', ''),
+            password=password,
         )
         self.stdout.write(
             self.style.SUCCESS(f'Superuser "{username}" created successfully')
