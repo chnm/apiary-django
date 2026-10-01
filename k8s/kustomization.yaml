@@ -18,6 +18,9 @@ configMapGenerator:
   - DB_USER=apiary-django
   - BOM_DB_PATH=/data/bom.sqlite3
   - OBJ_STORAGE=True
+  - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
+  - OBJ_STORAGE_REGION=rrchnm
+  - OBJ_STORAGE_BUCKET_NAME=workspaces.apiary.rrchnm.org
   - DJANGO_ALLOWED_HOSTS=workspaces.apiary.rrchnm.org
   - DJANGO_CSRF_TRUSTED_ORIGINS=https://workspaces.apiary.rrchnm.org
   name: apiary-env
