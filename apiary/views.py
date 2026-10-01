@@ -20,12 +20,6 @@ ALLOWED_COMMANDS = {
         ],
         'timeout': 30
     },
-    'init_superuser': {
-        'name': 'Initialize Superuser',
-        'description': 'Create or verify superuser account (idempotent)',
-        'args': [],
-        'timeout': 30
-    },
     'init_project_groups': {
         'name': 'Initialize Project Groups',
         'description': 'Create project-specific user groups',
