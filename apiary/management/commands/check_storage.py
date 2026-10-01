@@ -27,6 +27,8 @@ class Command(BaseCommand):
             checks = []
             try:
                 name = storage.save(f"apiary/storage-check/{payload.decode()}.txt", ContentFile(payload))
+                checks.append((f"wrote {name} ({storage.size(name)} bytes)",
+                               storage.exists(name) and storage.size(name) == len(payload)))
                 with storage.open(name) as f:
                     checks.append(("read back", f.read() == payload))
                 url = storage.url(name)
