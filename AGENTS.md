@@ -15,7 +15,7 @@ This document provides essential context for AI agents working in the Apiary Dja
 
 ## Technology Stack
 
-- **Python**: 3.13.0 (see `.python-version`)
+- **Python**: 3.14 (see `.python-version`; the image uses the StageX Python base)
 - **Django**: 5.2.7+
 - **Package Management**: `uv` (modern Python package manager)
 - **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db
@@ -392,7 +392,7 @@ def my_admin_view(request):
 
 ### Python Version
 
-- Project uses Python 3.13.0 (specified in `.python-version`)
+- Project uses Python 3.14 (specified in `.python-version`)
 - Use `uv` for package management, not pip directly
 - Dependencies locked in `uv.lock`
 
@@ -407,7 +407,7 @@ from django.test import TestCase
 
 When adding tests:
 - Use Django's TestCase
-- Create test databases: `uv run manage.py test <app>`
+- Run tests: `uv run pytest` (in-memory SQLite for every alias via `apiary.settings.test`)
 - Consider database routing in test setup
 
 ## CI/CD
