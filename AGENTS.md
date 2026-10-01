@@ -447,7 +447,6 @@ Current URL configuration (`apiary/urls.py`):
 
 **Available Management Commands:**
 - `test_command` - Demo command with customizable message argument
-- `init_superuser` - Idempotent superuser creation
 - `init_project_groups` - Create project-specific user groups
 
 To add new commands, update `ALLOWED_COMMANDS` in `apiary/views.py`:
