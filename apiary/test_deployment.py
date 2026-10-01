@@ -131,3 +131,21 @@ assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
             result = post()
         self.assertNotEqual(run.call_args.args[0][0], "uv")
         self.assertEqual((result["success"], result["error"]), (False, "boom"))
+
+    def test_shared_apps_never_migrate_into_project_databases(self):
+        from django.db import router
+
+        projects = {"bom": "bom_db", "connthreads": "connthreads_db",
+                    "mappingviolence": "mappingviolence_db", "relec": "relec_db"}
+        for db in ("default", *projects.values()):
+            for app in ("apiary", "auth", "account", "socialaccount", *projects):
+                expected = projects.get(app, "default") == db
+                self.assertEqual(router.allow_migrate(db, app), expected, (db, app))
+
+    def test_time_zone_database_is_available(self):
+        # StageX has no /usr/share/zoneinfo; without the tzdata package every dated page fails.
+        import zoneinfo
+
+        from django.conf import settings
+
+        zoneinfo.ZoneInfo(settings.TIME_ZONE)

@@ -47,8 +47,8 @@ class DefaultRouter:
         return None
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
-        if db == "default":
-            return True
+        # Last router: anything a project router did not claim belongs only on default.
+        return db == "default"
 
 class AbstractRouter:
 

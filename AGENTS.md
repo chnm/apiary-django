@@ -15,7 +15,7 @@ This document provides essential context for AI agents working in the Apiary Dja
 
 ## Technology Stack
 
-- **Python**: 3.13.0 (see `.python-version`)
+- **Python**: 3.14 (see `.python-version`; the image uses the StageX Python base)
 - **Django**: 5.2.7+
 - **Package Management**: `uv` (modern Python package manager)
 - **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db
@@ -341,6 +341,24 @@ class LocationsConfig(AppConfig):
 - Uses boto3 + django-storages
 - See `settings_media.py` for configuration
 
+Two media storages, both served by the app at `/media/<public|private>/...`
+(`apiary.views.media`), because Garage's S3 endpoint is internal-only:
+
+- `storages["public"]`: anyone can read.
+- `storages["default"]` (private): readable by superusers and users with any
+  permission in the app named by the file's first path segment, so upload
+  private files under `<app_label>/...` (e.g. `upload_to="bom/"`).
+
+```python
+from apiary.storage import public_storage
+
+scan = models.FileField(upload_to="bom/scans/")                     # private
+image = models.ImageField(upload_to="bom/", storage=public_storage)  # public
+```
+
+Files are served with `Content-Security-Policy: sandbox`. Check both storages
+with `uv run manage.py check_storage`; it is also on the management dashboard.
+
 ### Debug Toolbar in Docker
 
 - Special INTERNAL_IPS hack in `settings_debug_toolbar.py` to work in Docker
@@ -392,7 +410,7 @@ def my_admin_view(request):
 
 ### Python Version
 
-- Project uses Python 3.13.0 (specified in `.python-version`)
+- Project uses Python 3.14 (specified in `.python-version`)
 - Use `uv` for package management, not pip directly
 - Dependencies locked in `uv.lock`
 
@@ -407,7 +425,7 @@ from django.test import TestCase
 
 When adding tests:
 - Use Django's TestCase
-- Create test databases: `uv run manage.py test <app>`
+- Run tests: `uv run pytest` (in-memory SQLite for every alias via `apiary.settings.test`)
 - Consider database routing in test setup
 
 ## CI/CD
