@@ -2,7 +2,9 @@
 Apiary application views.
 """
 import subprocess
+import sys
 import json
+from pathlib import Path
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -77,7 +79,8 @@ def run_management_command(request):
         command_config = ALLOWED_COMMANDS[command_name]
         
         # Build command arguments
-        cmd = ['uv', 'run', 'manage.py', command_name]
+        # The image's read-only root has no uv cache, so use this interpreter directly.
+        cmd = [sys.executable, 'manage.py', command_name]
         
         # Add command-specific arguments
         for arg in command_config.get('args', []):
@@ -98,13 +101,15 @@ def run_management_command(request):
             cmd,
             capture_output=True,
             text=True,
-            timeout=command_config.get('timeout', 30)
+            timeout=command_config.get('timeout', 30),
+            cwd=Path(__file__).resolve().parent.parent,
         )
         
+        success = result.returncode == 0
         return JsonResponse({
-            'success': True,
+            'success': success,
             'output': result.stdout,
-            'error': result.stderr if result.stderr else None,
+            'error': (result.stderr or None) if success else (result.stderr or result.stdout or f'Exited with code {result.returncode}'),
             'return_code': result.returncode
         })
     except subprocess.TimeoutExpired:

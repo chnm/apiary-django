@@ -108,3 +108,26 @@ assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
         job = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/migrate.yaml").read_text())
         command = job["spec"]["template"]["spec"]["containers"][0]["command"]
         self.assertEqual(command[-1], "python manage.py migrate_projects && python manage.py init_superuser")
+
+    def test_dashboard_runs_commands_without_uv_and_reports_failures(self):
+        import json
+        import subprocess
+
+        from django.test import RequestFactory
+
+        from apiary.views import run_management_command
+
+        def post():
+            request = RequestFactory().post("/apiary/run-command/", {"command": "test_command", "message": "hi"})
+            request.user = MagicMock(is_active=True, is_superuser=True)
+            return json.loads(run_management_command(request).content)
+
+        result = post()
+        self.assertTrue(result["success"], result)
+        self.assertIn("hi", result["output"])
+
+        failed = subprocess.CompletedProcess([], 1, stdout="", stderr="boom")
+        with patch("apiary.views.subprocess.run", return_value=failed) as run:
+            result = post()
+        self.assertNotEqual(run.call_args.args[0][0], "uv")
+        self.assertEqual((result["success"], result["error"]), (False, "boom"))
