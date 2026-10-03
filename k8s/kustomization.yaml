@@ -9,12 +9,13 @@ resources:
 - netpol.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
-# Pinned by commit; bump all three refs together. Media lives in Garage, so no
+# Pinned by commit; bump every ref together. Media lives in Garage, so no
 # media component.
 components:
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/developer-refresh?ref=2c95a94d48b568d33430da42aad066fc65b9831d
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
 configMapGenerator:
@@ -130,9 +131,22 @@ patches:
   target:
     kind: CronJob
     name: postgres-backup
+# 05:45 ET: after the 02:45 backup, and clear of the canary's 05:15 refresh on
+# the same developer Postgres. The copy holds PostgreSQL only; BOM stays SQLite.
+# The component's sanitize.sql covers users, sessions, allauth and the admin
+# log; app tables (relec contributor names included) are copied as-is.
+- patch: |-
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata: { name: developer-refresh }
+    spec:
+      schedule: "45 5 * * *"
+  target:
+    kind: CronJob
+    name: developer-refresh
 
-# Copy the pinned digest into IMAGE_DIGEST. Must live here: replacements in
-# components run before `images:` below.
+# Copy the pinned digest into IMAGE_DIGEST and the developer-copy record. Must
+# live here: replacements in components run before `images:` below.
 replacements:
 - source:
     fieldPath: spec.template.spec.containers.[name=app].image
@@ -147,6 +161,16 @@ replacements:
     select:
       kind: Deployment
       name: app
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].image
+    kind: Deployment
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.jobTemplate.spec.template.spec.containers.[name=swap].env.[name=APP_IMAGE].value
+    select:
+      kind: CronJob
+      name: developer-refresh
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
