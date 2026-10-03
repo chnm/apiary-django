@@ -15,3 +15,5 @@ data:
   APP_SECRET: eso/apiary-django
   RESTIC_REPO: workspaces.apiary.rrchnm.org
   RESTIC_SECRET: eso/restic-apiary
+  DEVELOPER_APP: apiary
+  DEVELOPER_SECRET: eso/developer-apiary
