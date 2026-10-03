@@ -7,8 +7,9 @@
 # SQLite's integrity_check on the BOM copy. That proves the key, the repo, and
 # readable artifacts without touching the live database or volume.
 #
-# It runs the app image, which kustomize does not pin here, so apply it with the
-# digest from kustomization.yaml (fish):
+# The generic rehearsal is rrchnm-systems/k8s-django jobs/restore.yaml; this one
+# also checks the BOM SQLite copy. It runs the app image, which kustomize does
+# not pin here, so apply it with the digest from kustomization.yaml (fish):
 #
 #   set d (yq -r '.images[0].digest' k8s/kustomization.yaml)
 #   kubectl -n apiary delete job postgres-restore --ignore-not-found
@@ -62,7 +63,7 @@ spec:
             - { name: RESTORE_TARGET, value: /restore }
             - { name: RESTORE_INTERACTIVE, value: "0" }
             - name: RESTIC_PASSWORD
-              valueFrom: { secretKeyRef: { name: restic-apiary, key: RESTIC_PASSWORD } }
+              valueFrom: { secretKeyRef: { name: restic, key: RESTIC_PASSWORD } }
           # restic restores each file's owner; the dumps are owned by the backup's
           # non-root uid, so it needs CHOWN (and FOWNER to set modes on them).
           securityContext:
@@ -137,7 +138,7 @@ spec:
           emptyDir: { sizeLimit: 4Gi }
         - name: keys
           secret:
-            secretName: restic-apiary
+            secretName: restic
             defaultMode: 0444
             items:
               - { key: ssh_key, path: ssh_key }

@@ -124,9 +124,11 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
 
         import yaml
 
-        job = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/migrate.yaml").read_text())
-        command = job["spec"]["template"]["spec"]["containers"][0]["command"]
-        self.assertEqual(command[-1], "python manage.py migrate_projects && python manage.py init_superuser")
+        # The migrate Job comes from the k8s-django app component; this overlay patches its command.
+        overlay = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/kustomization.yaml").read_text())
+        (patch,) = [p for p in overlay["patches"] if p["target"] == {"kind": "Job", "name": "migrate"}]
+        (container,) = yaml.safe_load(patch["patch"])["spec"]["template"]["spec"]["containers"]
+        self.assertEqual(container["command"][-1], "python manage.py migrate_projects && python manage.py init_superuser")
 
     def test_dashboard_runs_commands_without_uv_and_reports_failures(self):
         import json

@@ -1,0 +1,14 @@
+---
+# BOM's SQLite database, mounted at /data by the app and the migrate Job, and
+# read by the nightly backup (patches in kustomization.yaml).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bom
+  # Same wave as the migration consumer: local-path waits for a scheduled pod.
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests: { storage: 2Gi }
