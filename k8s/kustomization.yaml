@@ -7,6 +7,7 @@ resources:
 - externalsecret.yaml
 - postgres.yaml
 - migrate.yaml
+- backup.yaml
 - app.yaml
 - httproute.yaml
 configMapGenerator:

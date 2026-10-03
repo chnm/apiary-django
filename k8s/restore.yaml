@@ -1,0 +1,148 @@
+---
+# PARKED: deliberately NOT in kustomization.yaml, so Argo neither applies nor
+# prunes it. Apply it by hand.
+#
+# As written it is a NON-DESTRUCTIVE REHEARSAL: it restores the newest snapshot
+# into this pod's scratch space, lists the Postgres dump's schemas, and runs
+# SQLite's integrity_check on the BOM copy. That proves the key, the repo, and
+# readable artifacts without touching the live database or volume.
+#
+# It runs the app image, which kustomize does not pin here, so apply it with the
+# digest from kustomization.yaml (fish):
+#
+#   set d (yq -r '.images[0].digest' k8s/kustomization.yaml)
+#   kubectl -n apiary delete job postgres-restore --ignore-not-found
+#   sed "s|image: oci.rrchnm.internal/rrchnm/apiary-django\$|image: oci.rrchnm.internal/rrchnm/apiary-django@$d|" k8s/restore.yaml | kubectl -n apiary apply -f -
+#   kubectl -n apiary logs -f job/postgres-restore -c verify-postgres
+#   kubectl -n apiary logs job/postgres-restore -c verify-bom
+#
+# The CronJob alternates targets by weekday, so set RESTIC_REPOSITORY to whichever
+# server holds the night you want (backup1 here).
+#
+# For a REAL recovery, in this order:
+#   1. kubectl -n apiary scale deployment/apiary --replicas=0
+#   2. Postgres: change verify-postgres's command to
+#        pg_restore --host=postgres --username=apiary-django --dbname=apiary-django
+#                   --clean --if-exists --no-owner /restore/dump/apiary-django.dump
+#      with PGPASSWORD from Secret apiary-django key DB_PASS (as the backup's dump step).
+#   3. BOM: mount the `bom` PVC read-write in verify-bom and copy
+#      /restore/dump/bom.sqlite3 over /data/bom.sqlite3 (as uid 10001).
+#   4. Apply, watch it to completion, scale the Deployment back to 1, and check
+#      a known project's pages before declaring success.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore
+  namespace: apiary
+  labels: { app: postgres-restore }
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app: postgres-restore }   # matched by the backup-egress policy
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: restore
+          # Pinned by digest: a node keeps a stale `:main` (IfNotPresent). Bump deliberately.
+          image: oci.rrchnm.internal/rrchnm-systems/backup-restic@sha256:62cb4d520e31462ca49c9659e1d39279752e0d24d44d9e608bdd55094e56e61b
+          command: ["/usr/local/bin/restore"]
+          env:
+            - { name: HOME, value: /work }
+            - { name: RESTIC_CACHE_DIR, value: /work/.cache/restic }
+            - { name: RESTIC_REPOSITORY, value: "rclone:restic-rclone@backup1.rrchnm.internal:workspaces.apiary.rrchnm.org" }
+            - { name: RESTIC_TAG, value: apiary-django }
+            - { name: RESTIC_HOST, value: apiary-django }
+            - { name: RESTORE_SNAPSHOT, value: latest }
+            - { name: RESTORE_TARGET, value: /restore }
+            - { name: RESTORE_INTERACTIVE, value: "0" }
+            - name: RESTIC_PASSWORD
+              valueFrom: { secretKeyRef: { name: restic-apiary, key: RESTIC_PASSWORD } }
+          # restic restores each file's owner; the dumps are owned by the backup's
+          # non-root uid, so it needs CHOWN (and FOWNER to set modes on them).
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_OVERRIDE", "CHOWN", "FOWNER"]
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            - { name: restore, mountPath: /restore }
+            - { name: keys, mountPath: /keys-raw, readOnly: true }
+            - { name: work, mountPath: /work }
+            - { name: tmp, mountPath: /tmp }
+        - name: verify-bom
+          image: oci.rrchnm.internal/rrchnm/apiary-django
+          command: ["python", "-c"]
+          args:
+            - |
+              import sqlite3
+              db = sqlite3.connect("file:/restore/dump/bom.sqlite3?mode=ro", uri=True)
+              ok = db.execute("PRAGMA integrity_check").fetchone()[0]
+              tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+              print(f"[restore] bom.sqlite3 integrity={ok} tables={len(tables)}")
+              if ok != "ok" or not tables:
+                  raise SystemExit("BOM copy is not usable")
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: restore, mountPath: /restore, readOnly: true }
+      containers:
+        # Every schema the app routes to should appear in the listing.
+        - name: verify-postgres
+          image: docker.io/pgautoupgrade/pgautoupgrade@sha256:9892fd41b60f12d8a3d0272ce40f4d8f745184e82b03e7fe310ef98d8a29080c
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              pg_restore --list /restore/dump/apiary-django.dump > /tmp/toc
+              echo "[restore] $(wc -l < /tmp/toc) TOC entries"
+              for s in bom connthreads mappingviolence relec; do
+                grep -q " SCHEMA - $s " /tmp/toc || { echo "[restore] schema $s missing" >&2; exit 1; }
+                echo "[restore] schema $s present"
+              done
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: restore, mountPath: /restore, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: restore
+          emptyDir: { sizeLimit: 4Gi }
+        - name: keys
+          secret:
+            secretName: restic-apiary
+            defaultMode: 0444
+            items:
+              - { key: ssh_key, path: ssh_key }
+              - { key: known_hosts, path: known_hosts }
+        - name: work
+          emptyDir: { sizeLimit: 1Gi }
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
