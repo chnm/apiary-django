@@ -29,6 +29,10 @@ spec:
           envFrom:
             - configMapRef: { name: apiary-env }
             - secretRef: { name: apiary-django }
+          env:
+            # Fail fast (and let Argo retry) rather than queue an exclusive lock
+            # behind a running pg_dump, which would stall the app's queries.
+            - { name: DB_LOCK_TIMEOUT, value: 10s }
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: [ALL] }

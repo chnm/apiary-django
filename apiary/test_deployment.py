@@ -81,6 +81,25 @@ assert settings.DATABASES["bom_db"]["NAME"] == "/data/bom.sqlite3"
 assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 """], env={**environment, "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
 
+    def test_db_lock_timeout_applies_to_every_postgres_alias_only(self):
+        import os
+        import subprocess
+        import sys
+
+        subprocess.run([sys.executable, "-c", """
+import django
+django.setup()
+from django.conf import settings
+pg = [a for a, d in settings.DATABASES.items() if d["ENGINE"] == "django.db.backends.postgresql"]
+assert len(pg) == 4, pg
+for alias in pg:
+    options = settings.DATABASES[alias]["OPTIONS"]["options"]
+    assert options.startswith("-c search_path="), options
+    assert options.endswith(" -c lock_timeout=10s"), options
+assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in str(settings.DATABASES["bom_db"]["OPTIONS"])
+"""], env={**os.environ, "DJANGO_SECRET_KEY": "test-only", "DB_LOCK_TIMEOUT": "10s",
+              "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
+
     def test_init_superuser_creates_once_and_never_resets_an_existing_account(self):
         from io import StringIO
 
