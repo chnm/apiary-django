@@ -47,3 +47,31 @@ spec:
         - { matchName: slack.com }
       toPorts:
         - ports: [{ port: "443", protocol: TCP }]
+---
+# Backup and restore pods only: reach backup1/backup2 for restic over SSH, and
+# Slack for restic-notify. Cilium unions this with apiary-isolation, so the app
+# and Postgres gain nothing. Every backup pod must carry one of these labels, or
+# restic fails with an SSH timeout that surfaces only as Error pods.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: apiary-backup-egress
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  endpointSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [postgres-backup, postgres-restore] }
+  egress:
+    - toCIDR:
+        - 10.112.113.251/32   # backup1
+        - 10.112.113.252/32   # backup2
+      toPorts:
+        - ports:
+            - { port: "22", protocol: TCP }
+    # toFQDNs only matches names resolved through Cilium's DNS proxy, which the
+    # apiary-isolation DNS rule already enables for every pod.
+    - toFQDNs:
+        - matchName: hooks.slack.com
+      toPorts:
+        - ports:
+            - { port: "443", protocol: TCP }

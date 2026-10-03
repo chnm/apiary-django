@@ -1,0 +1,190 @@
+---
+# restic-apiary — this namespace's OWN restic identity (rrchnm-systems/infra#192,
+# #200): ssh_key, known_hosts, RESTIC_PASSWORD, notify_slack_webhook. The backup
+# servers force this key to `rclone serve restic` on this app's repo only, and no
+# other namespace holds the repo password.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: restic-apiary
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: restic-apiary
+    creationPolicy: Owner
+  dataFrom:
+    - extract:
+        key: eso/restic-apiary
+
+---
+# Nightly backup: a pg_dump of the whole database (public plus the project
+# schemas migrate_projects creates) and a consistent copy of the BOM SQLite
+# file, where BOM's data actually lives. Uploaded media lives in Garage
+# (3 replicas) and is not in this backup.
+#
+# Production impact is bounded:
+#   - pg_dump reads one consistent snapshot and never blocks the app's reads or
+#     writes; --lock-wait-timeout makes it fail instead of queueing behind DDL.
+#   - The SQLite copy uses SQLite's online backup API on a read-only open, so it
+#     takes only a shared lock; the app's writes wait at most for the copy.
+#   - Both land in this pod's emptyDir, not on the Postgres or app node's disk.
+#
+# PREREQS in rrchnm-systems/infra, or the Job is rejected or restic fails:
+# CronJob in the apiary-django AppProject, and the
+# `workspaces.apiary.rrchnm.org` entry with `serve: rclone` and this namespace's
+# public key in ansible/host_vars/backup{1,2}.yaml.
+#
+# Run now: kubectl -n apiary create job --from=cronjob/postgres-backup postgres-backup-now
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels: { app: postgres-backup }
+spec:
+  schedule: "45 2 * * *"          # 02:45 ET, before the 03:30 canary and forge runs
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels: { app: postgres-backup }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            seccompProfile: { type: RuntimeDefault }
+          initContainers:
+            # Same image as the server, so pg_dump's major version matches it.
+            - name: dump
+              image: docker.io/pgautoupgrade/pgautoupgrade@sha256:9892fd41b60f12d8a3d0272ce40f4d8f745184e82b03e7fe310ef98d8a29080c
+              command:
+                - pg_dump
+                - --host=postgres
+                - --username=apiary-django
+                - --dbname=apiary-django
+                - --format=custom
+                - --lock-wait-timeout=30s
+                - --file=/dump/apiary-django.dump
+              env:
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: apiary-django, key: DB_PASS } }
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 10001
+                runAsGroup: 10001
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 500m, memory: 256Mi }
+              volumeMounts:
+                - { name: dump, mountPath: /dump }
+            # The app's own image (kustomize pins its digest) for Python's sqlite3.
+            # Read-only open: Django's SQLite backend uses the rollback journal, so
+            # a reader needs no -shm file and never writes to the live volume.
+            - name: sqlite
+              image: oci.rrchnm.internal/rrchnm/apiary-django
+              command: ["python", "-c"]
+              args:
+                - |
+                  import sqlite3
+                  src = sqlite3.connect("file:/data/bom.sqlite3?mode=ro", uri=True)
+                  dst = sqlite3.connect("/dump/bom.sqlite3")
+                  src.backup(dst)
+                  ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
+                  if ok != "ok":
+                      raise SystemExit(f"BOM copy failed integrity_check: {ok}")
+                  print("[backup] bom.sqlite3 copied, integrity ok")
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 10001
+                runAsGroup: 10001
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 500m, memory: 256Mi }
+              volumeMounts:
+                - { name: bom, mountPath: /data, readOnly: true }
+                - { name: dump, mountPath: /dump }
+          containers:
+            - name: backup
+              # Pinned by digest: a node keeps a stale `:main` (IfNotPresent), which once ran
+              # an image without rclone: support. Bump deliberately: `crane digest …:main`.
+              image: oci.rrchnm.internal/rrchnm-systems/backup-restic@sha256:62cb4d520e31462ca49c9659e1d39279752e0d24d44d9e608bdd55094e56e61b
+              env:
+                - { name: TZ, value: America/New_York }
+                - { name: HOME, value: /work }
+                - { name: RESTIC_CACHE_DIR, value: /work/.cache/restic }
+                - { name: BACKUP_PATHS, value: /dump }
+                - { name: RESTIC_TAG, value: apiary-django }
+                - { name: RESTIC_HOST, value: apiary-django }
+                - { name: RESTIC_NOTIFY_BACKEND, value: slack }
+                - { name: RESTIC_NOTIFY_ON, value: always }
+                - name: RESTIC_NOTIFY_SLACK_WEBHOOK
+                  valueFrom: { secretKeyRef: { name: restic-apiary, key: notify_slack_webhook, optional: true } }
+                - name: RESTIC_PASSWORD
+                  valueFrom: { secretKeyRef: { name: restic-apiary, key: RESTIC_PASSWORD } }
+                # Alternate the two targets by weekday so neither server is a single point of loss.
+                - { name: RESTIC_REPOSITORY_BACKUP1, value: "rclone:restic-rclone@backup1.rrchnm.internal:workspaces.apiary.rrchnm.org" }
+                - { name: RESTIC_REPOSITORY_BACKUP2, value: "rclone:restic-rclone@backup2.rrchnm.internal:workspaces.apiary.rrchnm.org" }
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  case "$(date +%w)" in
+                    0|2|4|6) export RESTIC_REPOSITORY="$RESTIC_REPOSITORY_BACKUP1" ;;
+                    *)       export RESTIC_REPOSITORY="$RESTIC_REPOSITORY_BACKUP2" ;;
+                  esac
+                  echo "[backup] $(date +%a) -> ${RESTIC_REPOSITORY}"
+                  exec /usr/local/bin/backup
+              # root on purpose, as in every fleet restic Job: the image ships no USER.
+              # Bounded by a read-only rootfs, all caps dropped but DAC_OVERRIDE, and
+              # RuntimeDefault; the namespace's PSA level is baseline.
+              securityContext:
+                runAsUser: 0
+                runAsGroup: 0
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["DAC_OVERRIDE"]
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { cpu: "1", memory: 512Mi }
+              volumeMounts:
+                - { name: dump, mountPath: /dump, readOnly: true }
+                - { name: keys, mountPath: /keys-raw, readOnly: true }
+                - { name: work, mountPath: /work }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: dump
+              emptyDir: { sizeLimit: 4Gi }
+            # local-path is node-pinned RWO; the scheduler places this pod on the PV's
+            # node, where it shares the mount with the app (RWO allows same-node pods).
+            - name: bom
+              persistentVolumeClaim: { claimName: bom, readOnly: true }
+            - name: keys
+              secret:
+                secretName: restic-apiary
+                defaultMode: 0444
+                items:
+                  - { key: ssh_key, path: ssh_key }
+                  - { key: known_hosts, path: known_hosts }
+            - name: work
+              emptyDir: { sizeLimit: 1Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 256Mi }
