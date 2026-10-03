@@ -1,0 +1,17 @@
+---
+# This app's deployment parameters, read by the rrchnm-systems/k8s-django
+# components (keys documented in that repo's README). Not name-hashed: the
+# parked restore Job references it by name.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-deploy
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+data:
+  APP: apiary-django
+  FQDN: workspaces.apiary.rrchnm.org
+  DB_NAME: apiary-django
+  DB_USER: apiary-django
+  APP_SECRET: eso/apiary-django
+  RESTIC_REPO: workspaces.apiary.rrchnm.org
+  RESTIC_SECRET: eso/restic-apiary

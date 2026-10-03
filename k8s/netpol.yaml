@@ -1,35 +1,15 @@
 ---
+# The app's own outbound services. DNS + same-namespace isolation and the
+# backup egress come from the k8s-django components.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: apiary-isolation
-  annotations: { argocd.argoproj.io/sync-wave: "-2" }
-spec:
-  endpointSelector: {}
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: kube-system
-            k8s:k8s-app: kube-dns
-      toPorts:
-        - ports:
-            - { port: "53", protocol: UDP }
-            - { port: "53", protocol: TCP }
-          rules:
-            dns: [{ matchPattern: "*" }]
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: apiary
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: apiary-external-services
+  name: external-services
   annotations: { argocd.argoproj.io/sync-wave: "-2" }
 spec:
   endpointSelector:
     matchLabels:
-      k8s:app: apiary
+      k8s:app: app
   egress:
     # Garage S3 API nodes (obj.rrchnm.internal); plaintext on the internal LAN.
     - toCIDRSet:
@@ -47,31 +27,3 @@ spec:
         - { matchName: slack.com }
       toPorts:
         - ports: [{ port: "443", protocol: TCP }]
----
-# Backup and restore pods only: reach backup1/backup2 for restic over SSH, and
-# Slack for restic-notify. Cilium unions this with apiary-isolation, so the app
-# and Postgres gain nothing. Every backup pod must carry one of these labels, or
-# restic fails with an SSH timeout that surfaces only as Error pods.
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: apiary-backup-egress
-  annotations: { argocd.argoproj.io/sync-wave: "-2" }
-spec:
-  endpointSelector:
-    matchExpressions:
-      - { key: app, operator: In, values: [postgres-backup, postgres-restore] }
-  egress:
-    - toCIDR:
-        - 10.112.113.251/32   # backup1
-        - 10.112.113.252/32   # backup2
-      toPorts:
-        - ports:
-            - { port: "22", protocol: TCP }
-    # toFQDNs only matches names resolved through Cilium's DNS proxy, which the
-    # apiary-isolation DNS rule already enables for every pod.
-    - toFQDNs:
-        - matchName: hooks.slack.com
-      toPorts:
-        - ports:
-            - { port: "443", protocol: TCP }

@@ -64,6 +64,13 @@ DATABASES = {
         },
     },
 }
+# The migrate Job sets this so a migration blocked behind the nightly pg_dump
+# fails and retries instead of holding the app's queries behind its lock.
+if DB_LOCK_TIMEOUT := env("DB_LOCK_TIMEOUT", default=""):
+    for _db in DATABASES.values():
+        if _db["ENGINE"] == "django.db.backends.postgresql":
+            _db["OPTIONS"]["options"] += f" -c lock_timeout={DB_LOCK_TIMEOUT}"
+
 DATABASE_ROUTERS = [
     'apiary.routers.db.BomRouter',
     'apiary.routers.db.ConnThreadsRouter',

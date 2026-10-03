@@ -1,34 +1,159 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
 namespace: apiary
+
 resources:
-- quota.yaml
+- app-deploy.yaml
+- bom.yaml
 - netpol.yaml
-- externalsecret.yaml
-- postgres.yaml
-- migrate.yaml
-- backup.yaml
-- app.yaml
-- httproute.yaml
+
+# Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
+# Pinned by commit; bump all three refs together. Media lives in Garage, so no
+# media component.
+components:
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=49f9c7479ccda0db5739139a2c6cb3be65cb959c
+
+# This app's own Django settings (the components set DB_*, hosts and DEBUG).
 configMapGenerator:
 - literals:
-  - DEBUG=False
-  - DB_HOST=postgres
-  - DB_PORT=5432
-  - DB_NAME=apiary-django
-  - DB_USER=apiary-django
   - BOM_DB_PATH=/data/bom.sqlite3
   - OBJ_STORAGE=True
   - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
   - OBJ_STORAGE_REGION=rrchnm
   - OBJ_STORAGE_BUCKET_NAME=workspaces.apiary.rrchnm.org
-  - DJANGO_ALLOWED_HOSTS=workspaces.apiary.rrchnm.org
-  - DJANGO_CSRF_TRUSTED_ORIGINS=https://workspaces.apiary.rrchnm.org
-  name: apiary-env
+  name: app-env
   options:
     annotations:
       argocd.argoproj.io/sync-wave: "-2"
-# CI replaces this bootstrap digest. Do not activate Argo before the first build.
+
+  # One replica on node-local SQLite: never two writers. Move BOM to PostgreSQL
+  # before scaling horizontally.
+  # Project schemas + BOM, then the idempotent superuser bootstrap.
+  # 02:45 ET, before the 03:30 canary and forge runs. Also back up the BOM
+  # SQLite: SQLite's online backup API on a read-only open (Django's SQLite
+  # backend uses the rollback journal, so a reader needs no -shm file), checked
+  # with integrity_check, using the app's own image.
+patches:
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: app }
+    spec:
+      strategy: { type: Recreate, rollingUpdate: null }
+      template:
+        spec:
+          containers:
+            - name: app
+              readinessProbe: { timeoutSeconds: 5 }
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { cpu: "1", memory: 1Gi }
+              volumeMounts:
+                - { name: bom, mountPath: /data }
+          volumes:
+            - name: bom
+              persistentVolumeClaim: { claimName: bom }
+  target:
+    kind: Deployment
+    name: app
+- patch: |-
+    apiVersion: batch/v1
+    kind: Job
+    metadata: { name: migrate }
+    spec:
+      template:
+        spec:
+          containers:
+            - name: migrate
+              command: ["sh", "-c", "python manage.py migrate_projects && python manage.py init_superuser"]
+              resources:
+                requests: { cpu: 50m, memory: 192Mi }
+                limits: { cpu: "1", memory: 512Mi }
+              volumeMounts:
+                - { name: bom, mountPath: /data }
+          volumes:
+            - name: bom
+              persistentVolumeClaim: { claimName: bom }
+  target:
+    kind: Job
+    name: migrate
+- patch: |-
+    - op: replace
+      path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+      value: 10Gi
+  target:
+    kind: StatefulSet
+    name: postgres
+- patch: |-
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata: { name: postgres-backup }
+    spec:
+      schedule: "45 2 * * *"
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              initContainers:
+                - name: sqlite
+                  image: app
+                  command: ["python", "-c"]
+                  args:
+                    - |
+                      import sqlite3
+                      src = sqlite3.connect("file:/data/bom.sqlite3?mode=ro", uri=True)
+                      dst = sqlite3.connect("/dump/bom.sqlite3")
+                      src.backup(dst)
+                      ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
+                      if ok != "ok":
+                          raise SystemExit(f"BOM copy failed integrity_check: {ok}")
+                      print("[backup] bom.sqlite3 copied, integrity ok")
+                  securityContext:
+                    runAsNonRoot: true
+                    runAsUser: 10001
+                    runAsGroup: 10001
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities: { drop: [ALL] }
+                  resources:
+                    requests: { cpu: 50m, memory: 64Mi }
+                    limits: { cpu: 500m, memory: 256Mi }
+                  volumeMounts:
+                    - { name: bom, mountPath: /data, readOnly: true }
+                    - { name: dump, mountPath: /dump }
+              volumes:
+                - name: bom
+                  persistentVolumeClaim: { claimName: bom, readOnly: true }
+  target:
+    kind: CronJob
+    name: postgres-backup
+
+# Copy the pinned digest into IMAGE_DIGEST. Must live here: replacements in
+# components run before `images:` below.
+replacements:
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].image
+    kind: Deployment
+    name: app
+    options:
+      delimiter: '@'
+      index: 1
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=app].env.[name=IMAGE_DIGEST].value
+    select:
+      kind: Deployment
+      name: app
+
+# Two entries on purpose: `app` -> the real name, then the real name -> its
+# digest. CI (chnm/.github update-deploy-digests) pins with
+# `kustomize edit set image` and only updates an entry named after the real
+# image. Keep that the only `digest:` line.
 images:
+- name: app
+  newName: oci.rrchnm.internal/rrchnm/apiary-django
 - digest: sha256:9b16647a89f87550243a1217c04e37d00e29fbe5ef5056c2934a736d66aba869
   name: oci.rrchnm.internal/rrchnm/apiary-django

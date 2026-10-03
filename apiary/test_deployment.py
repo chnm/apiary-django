@@ -81,6 +81,25 @@ assert settings.DATABASES["bom_db"]["NAME"] == "/data/bom.sqlite3"
 assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 """], env={**environment, "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
 
+    def test_db_lock_timeout_applies_to_every_postgres_alias_only(self):
+        import os
+        import subprocess
+        import sys
+
+        subprocess.run([sys.executable, "-c", """
+import django
+django.setup()
+from django.conf import settings
+pg = [a for a, d in settings.DATABASES.items() if d["ENGINE"] == "django.db.backends.postgresql"]
+assert len(pg) == 4, pg
+for alias in pg:
+    options = settings.DATABASES[alias]["OPTIONS"]["options"]
+    assert options.startswith("-c search_path="), options
+    assert options.endswith(" -c lock_timeout=10s"), options
+assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in str(settings.DATABASES["bom_db"]["OPTIONS"])
+"""], env={**os.environ, "DJANGO_SECRET_KEY": "test-only", "DB_LOCK_TIMEOUT": "10s",
+              "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
+
     def test_init_superuser_creates_once_and_never_resets_an_existing_account(self):
         from io import StringIO
 
@@ -105,9 +124,11 @@ assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 
         import yaml
 
-        job = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/migrate.yaml").read_text())
-        command = job["spec"]["template"]["spec"]["containers"][0]["command"]
-        self.assertEqual(command[-1], "python manage.py migrate_projects && python manage.py init_superuser")
+        # The migrate Job comes from the k8s-django app component; this overlay patches its command.
+        overlay = yaml.safe_load((Path(__file__).resolve().parent.parent / "k8s/kustomization.yaml").read_text())
+        (patch,) = [p for p in overlay["patches"] if p["target"] == {"kind": "Job", "name": "migrate"}]
+        (container,) = yaml.safe_load(patch["patch"])["spec"]["template"]["spec"]["containers"]
+        self.assertEqual(container["command"][-1], "python manage.py migrate_projects && python manage.py init_superuser")
 
     def test_dashboard_runs_commands_without_uv_and_reports_failures(self):
         import json
