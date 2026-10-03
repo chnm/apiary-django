@@ -37,6 +37,10 @@ configMapGenerator:
   # SQLite: SQLite's online backup API on a read-only open (Django's SQLite
   # backend uses the rollback journal, so a reader needs no -shm file), checked
   # with integrity_check, using the app's own image.
+# 05:45 ET: after the 02:45 backup, and clear of the canary's 05:15 refresh on
+# the same developer Postgres. The copy holds PostgreSQL only; BOM stays SQLite.
+# The component's sanitize.sql covers users, sessions, allauth and the admin
+# log; app tables (relec contributor names included) are copied as-is.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -131,10 +135,6 @@ patches:
   target:
     kind: CronJob
     name: postgres-backup
-# 05:45 ET: after the 02:45 backup, and clear of the canary's 05:15 refresh on
-# the same developer Postgres. The copy holds PostgreSQL only; BOM stays SQLite.
-# The component's sanitize.sql covers users, sessions, allauth and the admin
-# log; app tables (relec contributor names included) are copied as-is.
 - patch: |-
     apiVersion: batch/v1
     kind: CronJob
@@ -179,5 +179,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:3cc405fd480655fe540005f8a8522b6ffbe07f12055a07da8da45987f722cecd
+- digest: sha256:b89c95641b2e54c91b69658077e584694c46a67546566b244f548d83981244cf
   name: oci.rrchnm.internal/rrchnm/apiary-django
