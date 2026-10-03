@@ -300,8 +300,6 @@ class YourModel(BaseModel):
         # logger automatically includes className
 ```
 
-Classify every new model in `apiary/management/commands/sanitize_for_dev.py` (`KEEP` or `SANITIZED`, with a rule for any personal data). The developer-database refresh refuses unclassified tables, and `apiary/test_sanitize.py` fails until the model is listed.
-
 ### Sub-applications Pattern
 
 Some apps have nested sub-applications (e.g., `relec/transcriptions/`, `relec/locations/`):
