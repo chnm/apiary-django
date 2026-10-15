@@ -19,10 +19,11 @@ Infrastructure onboarding remains parked in
 Before activation, point its AppProject and Application at
 `https://github.com/chnm/apiary-django.git` and provide read-only repository
 access if required. Grant this repository access to the IncusOS runner group
-and supply `ZOT_TOKEN` to CI. Digest pins require `GITHUB_TOKEN` write access
-under the branch rules. Seed `kv/eso/apiary-django` with
-`DJANGO_SECRET_KEY`, `DB_PASS`, existing `OBJ_STORAGE_*` values, and enabled
-`ALLAUTH_*` credentials. Adjust the S3 egress hostname if the endpoint changes.
+and supply `ZOT_TOKEN` to CI. Digest pins push as the org pin GitHub App
+(`PIN_APP_PRIVATE_KEY`), which must be able to bypass main's ruleset. Seed
+`kv/eso/apiary-django` with `DJANGO_SECRET_KEY`, `DB_PASS`, existing
+`OBJ_STORAGE_*` values, and enabled `ALLAUTH_*` credentials. Adjust the S3
+egress hostname if the endpoint changes.
 
 Do not activate Argo or change DNS until PostgreSQL, BOM SQLite, and object
 storage backups have passed an isolated restore rehearsal. Preserve the old
