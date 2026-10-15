@@ -51,7 +51,7 @@ class DeploymentTests(SimpleTestCase):
         )
         self.assertEqual(deployment["with"]["image"], "rrchnm/apiary-django")
         self.assertEqual(deployment["permissions"]["contents"], "write")
-        self.assertEqual(list(deployment["secrets"]), ["ZOT_TOKEN"])
+        self.assertEqual(list(deployment["secrets"]), ["ZOT_TOKEN", "PIN_APP_PRIVATE_KEY"])
         self.assertEqual(workflow["on"]["push"]["branches"], ["main"])
         self.assertEqual(workflow["on"]["pull_request"]["branches"], ["main"])
         self.assertEqual(workflow["on"]["push"]["paths-ignore"], ["k8s/kustomization.yaml"])
