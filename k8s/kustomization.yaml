@@ -42,6 +42,11 @@ configMapGenerator:
 # the same developer Postgres. The copy holds PostgreSQL only; the SQLite projects are not copied.
 # The component's sanitize.sql covers users, sessions, allauth and the admin
 # log; app tables (relec contributor names included) are copied as-is.
+            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
+            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
+            # because it reads the SQLite files on the node-local bom volume.
+            # Its env and envFrom are copied from the app container (replacements).
+# HTTPRoute rules have no merge key, so add the /mcp rule rather than merge.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -103,7 +108,6 @@ patches:
   target:
     kind: Service
     name: app
-# HTTPRoute rules have no merge key, so add the /mcp rule rather than merge.
 - patch: |-
     - op: add
       path: /spec/rules/0
@@ -199,6 +203,7 @@ patches:
 
 # Copy the pinned digest into IMAGE_DIGEST and the developer-copy record. Must
 # live here: replacements in components run before `images:` below.
+# Last, so the MCP container's copy includes the IMAGE_DIGEST set above.
 replacements:
 - source:
     fieldPath: spec.template.spec.containers.[name=app].image
@@ -223,7 +228,6 @@ replacements:
     select:
       kind: CronJob
       name: developer-refresh
-# Last, so the MCP container's copy includes the IMAGE_DIGEST set above.
 - source:
     fieldPath: spec.template.spec.containers.[name=app].env
     kind: Deployment
@@ -231,10 +235,11 @@ replacements:
   targets:
   - fieldPaths:
     - spec.template.spec.containers.[name=mcp].env
+    options:
+      create: true
     select:
       kind: Deployment
       name: app
-    options: { create: true }
 - source:
     fieldPath: spec.template.spec.containers.[name=app].envFrom
     kind: Deployment
@@ -242,10 +247,11 @@ replacements:
   targets:
   - fieldPaths:
     - spec.template.spec.containers.[name=mcp].envFrom
+    options:
+      create: true
     select:
       kind: Deployment
       name: app
-    options: { create: true }
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
@@ -254,5 +260,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:12635e52da6a1347f706053319ff8ae3628c0c816c607bdd9ff5d5b604d8fe32
+- digest: sha256:db31ce52bb71dae709ee8b197f88695e5e82ef174f13195e059237cb1176079d
   name: oci.rrchnm.internal/rrchnm/apiary-django
