@@ -174,7 +174,7 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
 
         zoneinfo.ZoneInfo(settings.TIME_ZONE)
 
-    def test_root_page_shows_each_project_three_ways_for_staff_only(self):
+    def test_root_page_shows_each_project_three_ways_to_anyone(self):
         from django.contrib.auth.models import AnonymousUser
         from django.db.models.query import QuerySet
         from django.test import RequestFactory
@@ -187,11 +187,9 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
 
         request = RequestFactory().get("/")
         request.user = AnonymousUser()
-        self.assertEqual(views.project_tables_page(request).status_code, 302)
 
         # Test settings make every alias SQLite; name each backend after its alias instead.
         backends = {f"{label}_db": MagicMock(display_name=f"{label}-engine") for label in views.PROJECT_APPS}
-        request.user = MagicMock(is_active=True, is_staff=True)
         with patch.object(QuerySet, "_fetch_all", fetch), patch.object(QuerySet, "count", return_value=101), \
                 patch("apiary.views.connections", backends):
             response = views.project_tables_page(request)
