@@ -23,6 +23,8 @@ from apiary.decorators import superuser_required
 from apiary.status import snapshot
 
 # Whitelist of allowed management commands with their configurations
+PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec', 'pinkertons')
+
 ALLOWED_COMMANDS = {
     'test_command': {
         'name': 'Test Command',
@@ -44,9 +46,20 @@ ALLOWED_COMMANDS = {
         'args': [],
         'timeout': 30
     },
+    'reset_project_data': {
+        'name': 'Reset Project Data',
+        'description': (
+            "Delete every row in a project's tables and reload its fixtures. "
+            'Cannot be undone, except from the nightly backup. Type the project name to confirm.'
+        ),
+        'args': [
+            {'name': 'project', 'type': 'select', 'choices': PROJECT_APPS, 'required': True},
+            {'name': 'confirm', 'type': 'text', 'default': '', 'placeholder': 'project name again', 'required': True},
+        ],
+        'timeout': 120
+    },
 }
 
-PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec', 'pinkertons')
 ROW_LIMIT = 100
 # Root page D3 sample per project: Ninja dataset, label fields, value field.
 SAMPLE_CHARTS = {
