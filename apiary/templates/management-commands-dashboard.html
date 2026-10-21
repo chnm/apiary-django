@@ -92,13 +92,21 @@
                 <form class="command-form" data-command="{{ command_key }}">
                     {% for arg in command.args %}
                     <label for="{{ command_key }}_{{ arg.name }}">{{ arg.name|title }}:</label>
+                    {% if arg.type == 'select' %}
+                    <select id="{{ command_key }}_{{ arg.name }}" name="{{ arg.name }}" {% if arg.required %}required{% endif %}>
+                        <option value="">Choose…</option>
+                        {% for choice in arg.choices %}<option value="{{ choice }}">{{ choice }}</option>{% endfor %}
+                    </select>
+                    {% else %}
                     <input 
                         type="{{ arg.type }}" 
                         id="{{ command_key }}_{{ arg.name }}" 
                         name="{{ arg.name }}"
                         value="{{ arg.default }}"
+                        {% if arg.placeholder %}placeholder="{{ arg.placeholder }}"{% endif %}
                         {% if arg.required %}required{% endif %}
                     />
+                    {% endif %}
                     {% endfor %}
                     <button type="submit">Run {{ command.name }}</button>
                 </form>
@@ -119,7 +127,10 @@
          */
         function runCommand(commandName, formData = {}) {
             const outputEl = document.getElementById(`output_${commandName}`);
-            const button = document.querySelector(`[data-command="${commandName}"]`);
+            // A command with arguments is a form: change its submit button, not
+            // the form, whose textContent would replace every field in it.
+            const trigger = document.querySelector(`[data-command="${commandName}"]`);
+            const button = trigger.tagName === 'FORM' ? trigger.querySelector('button[type="submit"]') : trigger;
             
             // Prepare button state
             button.disabled = true;
