@@ -11,3 +11,7 @@ SECURE_SSL_REDIRECT = False
 
 # SQLite stands in for PostgreSQL here, so its lack of table comments is expected.
 SILENCED_SYSTEM_CHECKS = [*SILENCED_SYSTEM_CHECKS, "models.W046"]
+
+# Tests never run collectstatic, so the manifest storage has nothing to read
+# when a test renders the admin.
+STORAGES = {**STORAGES, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}

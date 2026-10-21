@@ -10,7 +10,7 @@ services:
     volumes:
      #- dj-data:/app
       - .:/app
-    environment:
+    environment: &app-env
       - DEBUG=True
       - DJANGO_LOG_LEVEL=DEBUG
       - DJANGO_SECRET_KEY=thisisnotasecretkey
@@ -62,6 +62,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  # Read-only MCP server for AI agents (apiary/mcp_server.py), at
+  # http://localhost:8001/mcp with an API token from the admin.
+  mcp:
+    image: "rrchnm/apiary-django"
+    ports:
+      - 8001:8001
+    volumes:
+      - .:/app
+    environment: *app-env
+    command: uv run uvicorn apiary.mcp_server:app --host 0.0.0.0 --port 8001 --reload
+    depends_on:
+      app:
+        condition: service_started
   db:
     image: postgres:18
     ports:
