@@ -2,6 +2,7 @@
 Apiary application views.
 """
 import posixpath
+import tempfile
 import subprocess
 import time
 import sys
@@ -17,9 +18,10 @@ from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apiary.decorators import superuser_required
+from apiary.export import write_project_zip
 from apiary.status import snapshot
 
 # Whitelist of allowed management commands with their configurations
@@ -125,8 +127,31 @@ def management_commands_dashboard(request):
     """
     context = {
         'commands': ALLOWED_COMMANDS,
+        'projects': PROJECT_APPS,
     }
     return render(request, 'management-commands-dashboard.html', context)
+
+
+@superuser_required
+@require_GET
+def export_project(request):
+    """
+    Download one project as a ZIP of CSV files with a datapackage.json.
+    Superusers only: an export is every row of the project at once.
+    """
+    project = request.GET.get('project')
+    if project not in PROJECT_APPS:
+        raise Http404
+    # Built before the response starts, so a failure is an error page rather
+    # than a truncated download; past 16 MB it spills to /tmp.
+    archive = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)
+    write_project_zip(project, archive)
+    archive.seek(0)
+    stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
+    response = FileResponse(archive, as_attachment=True, filename=f'{project}-{stamp}.zip',
+                            content_type='application/zip')
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @superuser_required

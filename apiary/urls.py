@@ -21,6 +21,7 @@ urlpatterns = [
     path('apiary/whoami/', views.whoami_page, name='apiary_whoami_page'),
     path('apiary/mgmt/', views.management_commands_dashboard, name='apiary_management_commands_dashboard'),
     path('apiary/run-command/', views.run_management_command, name='run_management_command'),
+    path('apiary/export/', views.export_project, name='apiary_export_project'),
     path('apiary/status/', views.status_page, name='apiary_status'),
     path('apiary/status.json', views.status_json, name='apiary_status_json'),
     path('apiary/status/stream/', views.status_stream, name='apiary_status_stream'),
