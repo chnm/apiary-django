@@ -43,6 +43,10 @@ configMapGenerator:
 # the same developer Postgres. The copy holds PostgreSQL only; the SQLite projects are not copied.
 # The component's sanitize.sql covers users, sessions, allauth and the admin
 # log; app tables (relec contributor names included) are copied as-is.
+            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
+            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
+            # because it reads the SQLite files on the node-local sqlite volume.
+            # Its env and envFrom are copied from the app container (replacements).
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -266,5 +270,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:db31ce52bb71dae709ee8b197f88695e5e82ef174f13195e059237cb1176079d
+- digest: sha256:40abb330f069e9017bd99c4bd926d172961defa9716483c910f7601d5d43ef68
   name: oci.rrchnm.internal/rrchnm/apiary-django
