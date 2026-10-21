@@ -168,16 +168,18 @@ PostgreSQL schemas are created via `postgres_initdb/schema.sql` on first databas
 ### API
 
 Both APIs are namespaced by project, so model names never collide across
-projects and access follows the project's groups.
+projects and access follows the project's groups. Each project versions its
+API on its own: a breaking change to one project's models bumps only its
+version.
 
-- `/api/v1/<project>/<model>/` - DRF CRUD, generated for every project model
+- `/api/<project>/v1/<model>/` - DRF CRUD, generated for every project model
   (`apiary/api/crud.py`). Reads need `view_<model>`, writes their own model
   permission (`apiary/api/permissions.py`). Paginated with `limit`/`offset`.
-  Schema at `/api/v1/schema/`, docs at `/api/v1/docs/`.
-- `/api/v1/<project>/datasets/<name>/` - Ninja derived datasets (aggregates,
+  Schema at `/api/schema/`, docs at `/api/docs/`.
+- `/api/<project>/v1/datasets/<name>/` - Ninja derived datasets (aggregates,
   joins, time series) from each project's `datasets.py` router, collected in
   `apiary/api/datasets.py`. Needs any permission in the project. Docs at
-  `/api/v1/datasets/docs/`.
+  `/api/datasets/docs/`.
 
 Add a dataset by adding an endpoint to `<project>/datasets.py`. New models get
 CRUD automatically; never name a model `datasets`.

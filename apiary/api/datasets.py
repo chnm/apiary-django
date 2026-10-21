@@ -1,6 +1,6 @@
 """
 Ninja derived datasets (aggregates, joins, time series) for charts:
-/api/v1/<project>/datasets/<name>/, from each project's datasets.py router.
+/api/<project>/v1/datasets/<name>/, from each project's datasets.py router.
 """
 from importlib import import_module
 
@@ -37,8 +37,9 @@ for label in PROJECT_APPS:
     config = apps.get_app_config(label)
     if module_has_submodule(config.module, 'datasets'):
         api.add_router(
-            f"/{label}/datasets/",
+            f"/{label}/v1/datasets/",
             import_module(f"{label}.datasets").router,
             auth=ProjectAuth(label),
             tags=[config.verbose_name],
+            url_name_prefix=label,
         )

@@ -28,15 +28,15 @@ class ApiRoutingTests(SimpleTestCase):
             for model in apps.get_app_config(label).get_models():
                 # A model named "datasets" would shadow the project's Ninja routes.
                 self.assertNotEqual(model._meta.model_name, "datasets")
-                for path in (f"/api/v1/{label}/{model._meta.model_name}/",
-                             f"/api/v1/{label}/{model._meta.model_name}/1/"):
+                for path in (f"/api/{label}/v1/{model._meta.model_name}/",
+                             f"/api/{label}/v1/{model._meta.model_name}/1/"):
                     self.assertEqual(resolve(path).func.cls.queryset.model, model, path)
 
     def test_every_dataset_lives_under_its_project(self):
         paths = datasets.api.get_openapi_schema()["paths"]
         self.assertTrue(paths)
         for path in paths:
-            self.assertRegex(path, rf"^/api/v1/({'|'.join(PROJECT_APPS)})/datasets/[a-z-]+/$")
+            self.assertRegex(path, rf"^/api/({'|'.join(PROJECT_APPS)})/v1/datasets/[a-z-]+/$")
             self.assertEqual(resolve(path).namespace, "datasets", path)
 
     def test_crud_reads_need_the_view_permission_and_writes_their_own(self):
@@ -78,27 +78,27 @@ class DatasetTests(TestCase):
         self.client = TestClient(datasets.api)
 
     def test_datasets_need_a_permission_in_their_project(self):
-        path = "/bom/datasets/deaths-by-year/"
+        path = "/bom/v1/datasets/deaths-by-year/"
         self.assertEqual(self.client.get(path).status_code, 401)
         self.assertEqual(self.client.get(path, user=user(modules={"relec"})).status_code, 401)
         self.assertEqual(self.client.get(path, user=user(modules={"bom"})).status_code, 200)
 
     def test_time_series_sums_per_year_and_type_with_filters(self):
         bom = user(modules={"bom"})
-        self.assertEqual(self.client.get("/bom/datasets/deaths-by-year/", user=bom).json(), [
+        self.assertEqual(self.client.get("/bom/v1/datasets/deaths-by-year/", user=bom).json(), [
             {"year": 1665, "type": "Plague", "deaths": 15},
             {"year": 1666, "type": "Fever", "deaths": 3},
         ])
         self.assertEqual(
-            self.client.get("/bom/datasets/deaths-by-year/?start=1666", user=bom).json(),
+            self.client.get("/bom/v1/datasets/deaths-by-year/?start=1666", user=bom).json(),
             [{"year": 1666, "type": "Fever", "deaths": 3}],
         )
 
     def test_monthly_counts_and_joined_points(self):
         pinkertons = user(modules={"pinkertons"})
-        self.assertEqual(self.client.get("/pinkertons/datasets/activities-by-month/", user=pinkertons).json(), [
+        self.assertEqual(self.client.get("/pinkertons/v1/datasets/activities-by-month/", user=pinkertons).json(), [
             {"month": "1934-09-01", "investigation": "nyc", "activities": 2},
             {"month": "1936-02-01", "investigation": "hobart", "activities": 1},
         ])
-        points = self.client.get("/pinkertons/datasets/activity-points/", user=pinkertons).json()
+        points = self.client.get("/pinkertons/v1/datasets/activity-points/", user=pinkertons).json()
         self.assertEqual([(p["location"], p["latitude"]) for p in points], [("Bank", 40.7)])

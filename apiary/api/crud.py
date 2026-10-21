@@ -1,5 +1,6 @@
 """
-DRF CRUD generated for every project model: /api/v1/<project>/<model>/.
+DRF CRUD generated for every project model: /api/<project>/v1/<model>/.
+Each project versions its API on its own.
 """
 from django.apps import apps
 from rest_framework import serializers, viewsets
@@ -24,7 +25,7 @@ router = DefaultRouter()
 for label in PROJECT_APPS:
     for model in apps.get_app_config(label).get_models():
         router.register(
-            f"{label}/{model._meta.model_name}",
+            f"{label}/v1/{model._meta.model_name}",
             viewset_for(model),
             basename=f"{label}-{model._meta.model_name}",
         )
