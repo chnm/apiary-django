@@ -73,13 +73,13 @@ SAMPLE_CHARTS = {
 }
 
 
-@staff_member_required
 def project_tables_page(request):
     """
     Show every project model as a plain table, capped at ROW_LIMIT rows each,
     with its database backend and client-side DRF and Ninja API samples.
 
-    Restricted to staff because project data is not public.
+    Public: anyone can read the tables. The API samples use the visitor's own
+    permissions, so they load only for users with access to the project.
     """
     projects = []
     for label in PROJECT_APPS:
