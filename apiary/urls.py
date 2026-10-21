@@ -10,6 +10,7 @@ from apiary.health import health
 router = DefaultRouter()
 
 urlpatterns = [
+    path("", views.project_tables_page, name="apiary_project_tables_page"),
     path("health/", health),
     path("admin/", admin.site.urls),
     path('accounts/', include('allauth.urls')),
