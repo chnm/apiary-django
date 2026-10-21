@@ -22,7 +22,7 @@ This document provides essential context for AI agents working in the Apiary Dja
 - **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db and pinkertons_db
 - **Admin UI**: django-unfold (modern admin interface)
 - **Authentication**: django-allauth (ORCID, GitHub, Slack providers)
-- **API**: Django REST Framework + drf-spectacular (OpenAPI)
+- **API**: Django REST Framework + drf-spectacular for model CRUD; Django Ninja for derived datasets
 - **Storage**: S3-compatible object storage via django-storages (optional)
 - **Containerization**: Docker + Docker Compose
 
@@ -164,6 +164,23 @@ Router order in `DATABASE_ROUTERS` is critical - specific routers before fallbac
 
 **Schema Initialization:**
 PostgreSQL schemas are created via `postgres_initdb/schema.sql` on first database startup.
+
+### API
+
+Both APIs are namespaced by project, so model names never collide across
+projects and access follows the project's groups.
+
+- `/api/v1/<project>/<model>/` - DRF CRUD, generated for every project model
+  (`apiary/api/crud.py`). Reads need `view_<model>`, writes their own model
+  permission (`apiary/api/permissions.py`). Paginated with `limit`/`offset`.
+  Schema at `/api/v1/schema/`, docs at `/api/v1/docs/`.
+- `/api/v1/<project>/datasets/<name>/` - Ninja derived datasets (aggregates,
+  joins, time series) from each project's `datasets.py` router, collected in
+  `apiary/api/datasets.py`. Needs any permission in the project. Docs at
+  `/api/v1/datasets/docs/`.
+
+Add a dataset by adding an endpoint to `<project>/datasets.py`. New models get
+CRUD automatically; never name a model `datasets`.
 
 ### Model Architecture
 

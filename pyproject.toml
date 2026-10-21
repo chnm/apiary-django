@@ -19,6 +19,7 @@ dependencies = [
     "django-unfold ~= 0.108.0",
     "django-autocomplete-light ~= 5.0.0",
     "drf-spectacular ~= 0.30.0",
+    "django-ninja ~= 1.7.1",
     "requests ~= 2.34.2",
     "django-environ ~= 0.14.0",
     "django-storages ~= 1.14.6",
