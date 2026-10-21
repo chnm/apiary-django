@@ -117,6 +117,21 @@
                 <div id="output_{{ command_key }}" class="command-output"></div>
             </div>
             {% endfor %}
+
+            <div class="command-card">
+                <header>
+                    <h2>Export Project Data</h2>
+                    <p>Download a project as a ZIP of CSV files, one per table, with a datapackage.json describing their columns and links.</p>
+                </header>
+                <form method="get" action="{% url 'apiary_export_project' %}">
+                    <label for="export_project">Project:</label>
+                    <select id="export_project" name="project" required>
+                        <option value="">Choose…</option>
+                        {% for project in projects %}<option value="{{ project }}">{{ project }}</option>{% endfor %}
+                    </select>
+                    <button type="submit">Download ZIP</button>
+                </form>
+            </div>
         </article>
 
     </main>
