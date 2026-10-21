@@ -59,11 +59,61 @@ patches:
                 limits: { cpu: "1", memory: 1Gi }
               volumeMounts:
                 - { name: bom, mountPath: /data }
+            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
+            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
+            # because it reads the SQLite files on the node-local bom volume.
+            # Its env and envFrom are copied from the app container (replacements).
+            - name: mcp
+              image: app
+              command: ["uvicorn", "apiary.mcp_server:app", "--host", "0.0.0.0", "--port", "8001",
+                        "--no-server-header", "--timeout-graceful-shutdown", "10"]
+              ports:
+                - { name: mcp, containerPort: 8001 }
+              readinessProbe:
+                tcpSocket: { port: mcp }
+                initialDelaySeconds: 5
+                periodSeconds: 10
+              livenessProbe:
+                tcpSocket: { port: mcp }
+                initialDelaySeconds: 15
+                periodSeconds: 30
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: [ALL] }
+                readOnlyRootFilesystem: true
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { cpu: 500m, memory: 384Mi }
+              volumeMounts:
+                - { name: bom, mountPath: /data }
+                - { name: tmp, mountPath: /tmp }
           volumes:
             - name: bom
               persistentVolumeClaim: { claimName: bom }
   target:
     kind: Deployment
+    name: app
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata: { name: app }
+    spec:
+      ports:
+        - { name: mcp, port: 8001, targetPort: mcp, protocol: TCP }
+  target:
+    kind: Service
+    name: app
+# HTTPRoute rules have no merge key, so add the /mcp rule rather than merge.
+- patch: |-
+    - op: add
+      path: /spec/rules/0
+      value:
+        matches:
+          - path: { type: PathPrefix, value: /mcp }
+        backendRefs:
+          - { kind: Service, name: app, port: 8001 }
+  target:
+    kind: HTTPRoute
     name: app
 - patch: |-
     apiVersion: batch/v1
@@ -173,6 +223,29 @@ replacements:
     select:
       kind: CronJob
       name: developer-refresh
+# Last, so the MCP container's copy includes the IMAGE_DIGEST set above.
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].env
+    kind: Deployment
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=mcp].env
+    select:
+      kind: Deployment
+      name: app
+    options: { create: true }
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].envFrom
+    kind: Deployment
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=mcp].envFrom
+    select:
+      kind: Deployment
+      name: app
+    options: { create: true }
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with

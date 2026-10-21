@@ -184,6 +184,24 @@ version.
 Add a dataset by adding an endpoint to `<project>/datasets.py`. New models get
 CRUD automatically; never name a model `datasets`.
 
+### MCP for AI agents
+
+`/mcp` is a read-only MCP server (`apiary/mcp_server.py`) on the official MCP
+SDK. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
+WSGI: a second container in the k8s app pod (it reads the node-local SQLite
+files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
+
+- Auth: `Authorization: Bearer <token>`, an `APIToken` (`apiary/models.py`)
+  that superusers create and revoke in the admin (API Tokens). Only its SHA-256
+  digest is stored; the token is shown once. Every token can read every
+  project for now.
+- Tools: `list_projects`, `query_records`, `get_record`, `aggregate`. Field
+  paths are checked against the model's own project, so filters cannot reach
+  auth tables or another project.
+- ORM calls run on asgiref's single sync thread and close their connections:
+  outside Django's request cycle nothing else would.
+- The SDK's DNS-rebinding check uses `ALLOWED_HOSTS`.
+
 ### Model Architecture
 
 **BaseModel (`apiary/models.py`):**

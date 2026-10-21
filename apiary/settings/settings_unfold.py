@@ -254,6 +254,12 @@ UNFOLD = {
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
+                        "title": "API Tokens",
+                        "icon": "key",
+                        "link": lambda request: "/admin/apiary/apitoken/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
                         "title": "User Sessions",
                         "icon": "vpn_key",
                         "link": lambda request: "/admin/sessions/session/",
