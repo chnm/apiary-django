@@ -32,3 +32,11 @@
       we are currently digitizing the 1926 U.S. Census of Religious Bodies,
       which has individual schedules for approximately 232,000 congregations.
       We are also investigating denominational records and other sources of data.
+- model: apiary.project
+  pk: 5
+  fields:
+    name: Pinkertons
+    app_label: pinkertons
+    description: >
+      Mapping Private Investigations traces the daily reports of Pinkerton
+      operatives: who they watched, where, and how.

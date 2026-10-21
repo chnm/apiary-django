@@ -113,3 +113,9 @@ class RelecRouter(AbstractRouter):
             app_label='relec',
             db_name='relec_db'
         )
+class PinkertonsRouter(AbstractRouter):
+    def __init__(self):
+        super().__init__(
+            app_label='pinkertons',
+            db_name='pinkertons_db'
+        )

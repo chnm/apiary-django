@@ -12,5 +12,5 @@ class Command(BaseCommand):
             for schema in ("bom", "connthreads", "mappingviolence", "relec"):
                 cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
         call_command("migrate", database="default", interactive=False)
-        for app in ("bom", "connthreads", "mappingviolence", "relec"):
+        for app in ("bom", "connthreads", "mappingviolence", "relec", "pinkertons"):
             call_command("migrate", app, database=f"{app}_db", interactive=False)

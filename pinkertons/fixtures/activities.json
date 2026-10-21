@@ -1,0 +1,992 @@
+[
+  {
+    "model": "pinkertons.location",
+    "pk": 1,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "560 Berne St, S.E.",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 33.73754922,
+      "longitude": -84.36924192
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 2,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "943 West View Drive, S. W.",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 33.747138,
+      "longitude": -84.42223366
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 3,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "330 1/2 Trenholm S",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 33.74638853,
+      "longitude": -84.40432757
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 4,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "632 Peoples St",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 5,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "94 11th St, N. E.",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 33.78332204,
+      "longitude": -84.38408705
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 6,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "256 Walker St,  S. W.",
+      "location_name": "American Laundry",
+      "location_type": "Laundry",
+      "specific_location_type": "Laundry",
+      "latitude": 33.74775166,
+      "longitude": -84.40267148
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 7,
+    "fields": {
+      "locality": "Atlanta",
+      "street_address": "268-274 Walker St, S. W.",
+      "location_name": "Charlie's Restaurant",
+      "location_type": "Restaurant",
+      "specific_location_type": "Restaurant",
+      "latitude": 33.74758777,
+      "longitude": -84.40280349
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 8,
+    "fields": {
+      "locality": "Lordsburg, NM",
+      "street_address": "",
+      "location_name": "Central Bar & Café",
+      "location_type": "Bar",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 9,
+    "fields": {
+      "locality": "Lordsburg, NM",
+      "street_address": "",
+      "location_name": "Lordsburg, NM",
+      "location_type": "Neighborhood",
+      "specific_location_type": "",
+      "latitude": 32.35044538,
+      "longitude": -108.7097363
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 10,
+    "fields": {
+      "locality": "Smeltertown_Upper",
+      "street_address": "",
+      "location_name": "El Ato",
+      "location_type": "Neighborhood",
+      "specific_location_type": "",
+      "latitude": 31.78052,
+      "longitude": -106.52065
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 11,
+    "fields": {
+      "locality": "Smeltertown_Lower",
+      "street_address": "",
+      "location_name": "Post Office",
+      "location_type": "Post Office",
+      "specific_location_type": "",
+      "latitude": 31.78222,
+      "longitude": -106.52581
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 12,
+    "fields": {
+      "locality": "Smeltertown_Lower",
+      "street_address": "",
+      "location_name": "Poolroom",
+      "location_type": "Poolroom",
+      "specific_location_type": "",
+      "latitude": 31.78267707,
+      "longitude": -106.5258998
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 13,
+    "fields": {
+      "locality": "Smeltertown_Lower",
+      "street_address": "County Road, Smelter",
+      "location_name": "YMCA",
+      "location_type": "YMCA",
+      "specific_location_type": "",
+      "latitude": 31.78321,
+      "longitude": -106.52603
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 14,
+    "fields": {
+      "locality": "Smeltertown_Lower",
+      "street_address": "",
+      "location_name": "El Bajo",
+      "location_type": "Neighborhood",
+      "specific_location_type": "",
+      "latitude": 31.78227,
+      "longitude": -106.52633
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 15,
+    "fields": {
+      "locality": "Smeltertown_Lower",
+      "street_address": "",
+      "location_name": "",
+      "location_type": "",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 16,
+    "fields": {
+      "locality": "Long Branch, NJ",
+      "street_address": "465 Broadway",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 40.301201,
+      "longitude": -73.997574
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 17,
+    "fields": {
+      "locality": "Long Branch, NJ",
+      "street_address": "Broadway & Pearl",
+      "location_name": "",
+      "location_type": "Bus stop",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 18,
+    "fields": {
+      "locality": "Long Branch, NJ",
+      "street_address": "Corner of North Broadway and Long Branch Ave",
+      "location_name": "Dress Factory",
+      "location_type": "Factory",
+      "specific_location_type": "",
+      "latitude": 40.305784,
+      "longitude": -73.982364
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 19,
+    "fields": {
+      "locality": "Long Branch, NJ",
+      "street_address": "Woolworth 5 and 10 sent Store",
+      "location_name": "Woolworth 5 and 10 Cent Store",
+      "location_type": "Store",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 20,
+    "fields": {
+      "locality": "Long Branch, NJ",
+      "street_address": "Newbury 5 & 10 cent store",
+      "location_name": "",
+      "location_type": "Store",
+      "specific_location_type": "",
+      "latitude": null,
+      "longitude": null
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 21,
+    "fields": {
+      "locality": "",
+      "street_address": "465 Broadway",
+      "location_name": "",
+      "location_type": "",
+      "specific_location_type": "",
+      "latitude": 40.301201,
+      "longitude": -73.997574
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 22,
+    "fields": {
+      "locality": "Brooklyn, NY",
+      "street_address": "130 Rockaway Ave",
+      "location_name": "Brooklyn Palace",
+      "location_type": "Dance Hall",
+      "specific_location_type": "",
+      "latitude": 40.67909393,
+      "longitude": -73.91117368
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 23,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "East 10th St & Avenue D, nthwest corner",
+      "location_name": "Corn Exchange Bank",
+      "location_type": "Business",
+      "specific_location_type": "Bank",
+      "latitude": 40.72505251,
+      "longitude": -73.97511783
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 24,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "167 Avenue B",
+      "location_name": "",
+      "location_type": "Hospitality",
+      "specific_location_type": "Lunchroom",
+      "latitude": 40.72734568,
+      "longitude": -73.97943529
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 25,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "10th St & Avenue B",
+      "location_name": "",
+      "location_type": "Business",
+      "specific_location_type": "Drug Store",
+      "latitude": 40.72707741,
+      "longitude": -73.97990779
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 26,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "Sheriff St & East 2nd St",
+      "location_name": "11 Precinct",
+      "location_type": "Government/Organization",
+      "specific_location_type": "Police station",
+      "latitude": 40.72012576,
+      "longitude": -73.97930681
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 27,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "144 Columbia Street",
+      "location_name": "Capital Coffee Pot & Lunch",
+      "location_type": "Hospitality",
+      "specific_location_type": "Lunchroom",
+      "latitude": 40.72004771,
+      "longitude": -73.97835434
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 28,
+    "fields": {
+      "locality": "Manhattan, NYC",
+      "street_address": "14th St & 1st Ave",
+      "location_name": "Second Avenue line",
+      "location_type": "Transportation",
+      "specific_location_type": "Subway station",
+      "latitude": 40.73147884,
+      "longitude": -73.98255244
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 29,
+    "fields": {
+      "locality": "Bronx, NYC",
+      "street_address": "169th Street",
+      "location_name": "Third Avenue line",
+      "location_type": "",
+      "specific_location_type": "Subway station",
+      "latitude": 40.83315169,
+      "longitude": -73.90573662
+    }
+  },
+  {
+    "model": "pinkertons.location",
+    "pk": 30,
+    "fields": {
+      "locality": "Bronx, NYC",
+      "street_address": "1342 Franklin Ave",
+      "location_name": "",
+      "location_type": "Residence",
+      "specific_location_type": "",
+      "latitude": 40.83503157,
+      "longitude": -73.89930176
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 1,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-10",
+      "time": null,
+      "operative": "Morris Talley",
+      "activity": "Search",
+      "mode": "",
+      "subject": "John W. Smith",
+      "notes": "Visit address of former driver who Holmes reported a woman [Mrs Hardin] had said he sold her towels - woman said he not there, but she was his aunt and would find address",
+      "location": 1
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 2,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-11",
+      "time": "08:30:00",
+      "operative": "Morris Talley",
+      "activity": "Contact",
+      "mode": "",
+      "subject": "James Burke",
+      "notes": "with James Hampton, laundry supervisor - addess that Henley said worker called Burke took laundry - interviewed under pretext, saw Army jacket and govt sheet",
+      "location": 2
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 3,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-11",
+      "time": null,
+      "operative": "Morris Talley",
+      "activity": "Search",
+      "mode": "",
+      "subject": "James Burke",
+      "notes": "Following  lead from Henley - Black laundry worker took laundry from loading platform, delivered to 943 West View Drive - he does not live at address",
+      "location": 3
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 4,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-13",
+      "time": null,
+      "operative": "Morris Talley",
+      "activity": "Interview",
+      "mode": "",
+      "subject": "Mrs L. M. Hardin",
+      "notes": "With Hampton, visit woman who told Holmes about John W. Smith - location is rooming house, taken over by C. W. Chester, bought towels from American laundry route man 6m ago - Chester sold out after 2m",
+      "location": 4
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 5,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-13",
+      "time": null,
+      "operative": "Morris Talley",
+      "activity": "Search",
+      "mode": "",
+      "subject": "",
+      "notes": "\"Inquiries\" reveal that Chester frequently visits",
+      "location": 5
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 6,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-13",
+      "time": "11:40:00",
+      "operative": "M. M. Tallent",
+      "activity": "Roping",
+      "mode": "",
+      "subject": "Little",
+      "notes": "hired at laundry - assigned to work with Little",
+      "location": 6
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 7,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-13",
+      "time": "13:10:00",
+      "operative": "M. M. Tallent",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "",
+      "notes": "At lunch, exchange between new employee who seemed to know older drivers, was angry about not getting route had been promised [is this Tallent?]",
+      "location": 7
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 8,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-13",
+      "time": null,
+      "operative": "M. M. Tallent",
+      "activity": "Roping",
+      "mode": "",
+      "subject": "",
+      "notes": "[refers to himself in 3rd person] Laundry workers seem to know him -  Smith and Holmes wanted to give him route, Holmes told Henslee that Tallent had handled laundry at fort",
+      "location": 6
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 9,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-14",
+      "time": "07:45:00",
+      "operative": "M. M. Tallent",
+      "activity": "Roping",
+      "mode": "",
+      "subject": "",
+      "notes": "Report for work",
+      "location": 6
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 10,
+    "fields": {
+      "investigation": "atlanta",
+      "date": "1943-12-14",
+      "time": "07:50:00",
+      "operative": "M. M. Tallent",
+      "activity": "Roping",
+      "mode": "",
+      "subject": "Little",
+      "notes": "Went for refreshment with Little",
+      "location": 7
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 11,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": null,
+      "operative": "JKS",
+      "activity": "Interview",
+      "mode": "",
+      "subject": "Blas Nocha",
+      "notes": "",
+      "location": 8
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 12,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": null,
+      "operative": "JKS",
+      "activity": "Search",
+      "mode": "",
+      "subject": "Carr, Walker, West, Boys, Murray",
+      "notes": "",
+      "location": 9
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 13,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": "12:00:00",
+      "operative": "#43",
+      "activity": "Search",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "",
+      "location": 10
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 14,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": null,
+      "operative": "#43",
+      "activity": "Contact",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "\"made acquaintance\" using pretext that was looking for a room; none available due to small adobe housing",
+      "location": 11
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 15,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": null,
+      "operative": "#43",
+      "activity": "Contact",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "\"made acquaintance\" using pretext that was looking for a room; none available due to small adobe housing",
+      "location": 12
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 16,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": null,
+      "operative": "#43",
+      "activity": "Contact",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "\"conversation\" using pretext that was looking for a room; none available due to small adobe housing",
+      "location": 13
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 17,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-27",
+      "time": "22:00:00",
+      "operative": "#43",
+      "activity": "Search",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "8-10 acquaintances in all",
+      "location": 12
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 18,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-28",
+      "time": "07:00:00",
+      "operative": "#43",
+      "activity": "Search",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "",
+      "location": 14
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 19,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-28",
+      "time": null,
+      "operative": "#43",
+      "activity": "Contact",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "Jose Martinez, lived Upper Smeltertown, 14 y @ smelter, works at night",
+      "location": 15
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 20,
+    "fields": {
+      "investigation": "el-paso",
+      "date": "1939-07-28",
+      "time": null,
+      "operative": "#43",
+      "activity": "Contact",
+      "mode": "",
+      "subject": " Pancho Martinez",
+      "notes": "Candelario Sanchez, lived Upper Smeltertown, works @ smelter",
+      "location": 15
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 21,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": "07:20:00",
+      "operative": "H.R.M.",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Bessie Dover,Dover's Father",
+      "notes": "take up watch fro Dover's father and sister",
+      "location": 16
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 22,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": "07:20:00",
+      "operative": "W.L.C.",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "took up watch...at 465 Broadway...",
+      "location": 16
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 23,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": null,
+      "operative": "W.L.C.",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "",
+      "notes": "board bus, rode with her to work",
+      "location": 17
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 24,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": "07:35:00",
+      "operative": "W.L.C.",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "watched her at work",
+      "location": 18
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 25,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": "12:30:00",
+      "operative": "W.L.C.",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "Bought jewlery",
+      "location": 19
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 26,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": null,
+      "operative": "W.L.C.",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "Bought jewlery",
+      "location": 20
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 27,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": "12:50:00",
+      "operative": "W.L.C.",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "Watched her at work",
+      "location": 18
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 28,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": null,
+      "operative": "W.L.C.",
+      "activity": "Surveillance",
+      "mode": "car",
+      "subject": "Bessie Dover",
+      "notes": "sister left the factory and was driven to the vicinity of the her residence by Informant",
+      "location": 18
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 29,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-21",
+      "time": null,
+      "operative": "W.L.C.",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Bessie Dover",
+      "notes": "took up watch...at 465 Broadway...",
+      "location": 21
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 30,
+    "fields": {
+      "investigation": "hobart",
+      "date": "1936-02-22",
+      "time": "18:30:00",
+      "operative": "A.A.",
+      "activity": "Search",
+      "mode": "",
+      "subject": "Charles Dover",
+      "notes": "Instructed by Monmouth detectives Sacco and Zuckerman to go to dance hall where party they thought Dover would attend - tried to get in, refused as private party - saw crowds of men so impossible to locate Dover",
+      "location": 22
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 31,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": "11:45:00",
+      "operative": "H. McCabe",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "Designated by Simmonds",
+      "location": 23
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 32,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 24
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 33,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 25
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 34,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 26
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 35,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 27
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 36,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 26
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 37,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 28
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 38,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 29
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 39,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Shadowing",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 30
+    }
+  },
+  {
+    "model": "pinkertons.activity",
+    "pk": 40,
+    "fields": {
+      "investigation": "nyc",
+      "date": "1934-09-22",
+      "time": null,
+      "operative": "H. McCabe",
+      "activity": "Surveillance",
+      "mode": "",
+      "subject": "Alexander Piro",
+      "notes": "",
+      "location": 30
+    }
+  }
+]

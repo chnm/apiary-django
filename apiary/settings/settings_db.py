@@ -30,6 +30,10 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': env('BOM_DB_PATH', default=str(BASE_DIR / 'bom.sqlite3')),
     },
+    "pinkertons_db": {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': env('PINKERTONS_DB_PATH', default=str(BASE_DIR / 'pinkertons.sqlite3')),
+    },
     "connthreads_db": {
         "ENGINE": "django.db.backends.postgresql",
         "HOST": env("DB_HOST", default="localhost"),
@@ -76,6 +80,7 @@ DATABASE_ROUTERS = [
     'apiary.routers.db.ConnThreadsRouter',
     'apiary.routers.db.MappingViolenceRouter',
     'apiary.routers.db.RelecRouter',
+    'apiary.routers.db.PinkertonsRouter',
 
     'apiary.routers.db.AdminRouter',
     'apiary.routers.db.DefaultRouter',

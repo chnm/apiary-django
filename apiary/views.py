@@ -44,7 +44,7 @@ ALLOWED_COMMANDS = {
     },
 }
 
-PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec')
+PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec', 'pinkertons')
 ROW_LIMIT = 100
 
 

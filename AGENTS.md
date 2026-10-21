@@ -12,13 +12,14 @@ This document provides essential context for AI agents working in the Apiary Dja
 - **connthreads** (Connecting Threads) - Indian weavers and African Caribbean consumers history
 - **mappingviolence** (Mapping Violence) - Violence mapping project
 - **relec** (Religious Ecologies) - American religious history with 1926 Census data
+- **pinkertons** (Pinkertons) - Pinkerton operative activities and locations
 
 ## Technology Stack
 
 - **Python**: 3.14 (see `.python-version`; the image uses the StageX Python base)
 - **Django**: 5.2.7+
 - **Package Management**: `uv` (modern Python package manager)
-- **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db
+- **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db and pinkertons_db
 - **Admin UI**: django-unfold (modern admin interface)
 - **Authentication**: django-allauth (ORCID, GitHub, Slack providers)
 - **API**: Django REST Framework + drf-spectacular (OpenAPI)
@@ -39,6 +40,7 @@ uv run manage.py migrate bom --database=bom_db
 uv run manage.py migrate connthreads --database=connthreads_db
 uv run manage.py migrate mappingviolence --database=mappingviolence_db
 uv run manage.py migrate relec --database=relec_db
+uv run manage.py migrate pinkertons --database=pinkertons_db
 
 # Load fixtures
 uv run manage.py loaddata apiary/fixtures/projects.yaml
@@ -139,7 +141,7 @@ All settings modules are imported in `apiary/settings/__init__.py`.
 
 ### Multi-Database Architecture
 
-**Critical Concept:** Each project app has its own database routing via PostgreSQL schemas (or separate SQLite database for bom).
+**Critical Concept:** Each project app has its own database routing via PostgreSQL schemas (or separate SQLite databases for bom and pinkertons).
 
 **Database Configuration (`settings_db.py`):**
 ```python
@@ -148,7 +150,8 @@ DATABASES = {
     "bom_db": {...},           # SQLite for bom app
     "connthreads_db": {...},   # PostgreSQL connthreads schema
     "mappingviolence_db": {...}, # PostgreSQL mappingviolence schema
-    "relec_db": {...}          # PostgreSQL relec schema
+    "relec_db": {...},         # PostgreSQL relec schema
+    "pinkertons_db": {...}     # SQLite for pinkertons app
 }
 ```
 

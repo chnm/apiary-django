@@ -1,7 +1,8 @@
 # Apiary Django
 
-Multi-project Django workspace. Uses PostgreSQL schemas plus a separate BOM
-SQLite database; uploaded media remains in the existing S3-compatible bucket.
+Multi-project Django workspace. Uses PostgreSQL schemas plus separate BOM and
+Pinkertons SQLite databases; uploaded media remains in the existing
+S3-compatible bucket.
 
 Development: `uv sync`, then `docker --context rootless compose up`.
 The Compose stack loads development fixtures; do not use it for data migration.
