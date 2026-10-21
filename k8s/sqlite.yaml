@@ -1,11 +1,11 @@
 ---
-# The BOM and Pinkertons SQLite databases, mounted at /data by the app and the
-# migrate Job, and read by the nightly backup (patches in kustomization.yaml).
-# Named before Pinkertons existed; renaming the claim would orphan its data.
+# The SQLite databases (BOM and Pinkertons), mounted at /data by the app, the
+# MCP container and the migrate Job, and read by the nightly backup (patches
+# in kustomization.yaml).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: bom
+  name: sqlite
   # Same wave as the migration consumer: local-path waits for a scheduled pod.
   annotations: { argocd.argoproj.io/sync-wave: "1" }
 spec:

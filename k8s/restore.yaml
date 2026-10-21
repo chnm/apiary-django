@@ -4,30 +4,31 @@
 #
 # As written it is a NON-DESTRUCTIVE REHEARSAL: it restores the newest snapshot
 # into this pod's scratch space, lists the Postgres dump's schemas, and runs
-# SQLite's integrity_check on the BOM copy. That proves the key, the repo, and
-# readable artifacts without touching the live database or volume.
+# SQLite's integrity_check on the SQLite copies. That proves the key, the repo,
+# and readable artifacts without touching the live database or volume.
 #
 # The generic rehearsal is rrchnm-systems/k8s-django jobs/restore.yaml; this one
-# also checks the BOM SQLite copy. It runs the app image, which kustomize does
-# not pin here, so apply it with the digest from kustomization.yaml (fish):
+# also checks the SQLite copies (BOM and Pinkertons). It runs the app image,
+# which kustomize does not pin here, so apply it with the digest from
+# kustomization.yaml (fish):
 #
 #   set d (yq -r '.images[0].digest' k8s/kustomization.yaml)
 #   kubectl -n apiary delete job postgres-restore --ignore-not-found
 #   sed "s|image: oci.rrchnm.internal/rrchnm/apiary-django\$|image: oci.rrchnm.internal/rrchnm/apiary-django@$d|" k8s/restore.yaml | kubectl -n apiary apply -f -
 #   kubectl -n apiary logs -f job/postgres-restore -c verify-postgres
-#   kubectl -n apiary logs job/postgres-restore -c verify-bom
+#   kubectl -n apiary logs job/postgres-restore -c verify-sqlite
 #
 # The CronJob alternates targets by weekday, so set RESTIC_REPOSITORY to whichever
 # server holds the night you want (backup1 here).
 #
 # For a REAL recovery, in this order:
-#   1. kubectl -n apiary scale deployment/apiary --replicas=0
+#   1. kubectl -n apiary scale deployment/app --replicas=0
 #   2. Postgres: change verify-postgres's command to
 #        pg_restore --host=postgres --username=apiary-django --dbname=apiary-django
 #                   --clean --if-exists --no-owner /restore/dump/apiary-django.dump
 #      with PGPASSWORD from Secret apiary-django key DB_PASS (as the backup's dump step).
-#   3. BOM: mount the `bom` PVC read-write in verify-bom and copy
-#      /restore/dump/bom.sqlite3 over /data/bom.sqlite3 (as uid 10001).
+#   3. SQLite: mount the `sqlite` PVC read-write in verify-sqlite and copy
+#      /restore/dump/{bom,pinkertons}.sqlite3 over /data/ (as uid 10001).
 #   4. Apply, watch it to completion, scale the Deployment back to 1, and check
 #      a known project's pages before declaring success.
 apiVersion: batch/v1
@@ -82,18 +83,19 @@ spec:
             - { name: keys, mountPath: /keys-raw, readOnly: true }
             - { name: work, mountPath: /work }
             - { name: tmp, mountPath: /tmp }
-        - name: verify-bom
+        - name: verify-sqlite
           image: oci.rrchnm.internal/rrchnm/apiary-django
           command: ["python", "-c"]
           args:
             - |
               import sqlite3
-              db = sqlite3.connect("file:/restore/dump/bom.sqlite3?mode=ro", uri=True)
-              ok = db.execute("PRAGMA integrity_check").fetchone()[0]
-              tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
-              print(f"[restore] bom.sqlite3 integrity={ok} tables={len(tables)}")
-              if ok != "ok" or not tables:
-                  raise SystemExit("BOM copy is not usable")
+              for name in ("bom.sqlite3", "pinkertons.sqlite3"):
+                  db = sqlite3.connect(f"file:/restore/dump/{name}?mode=ro", uri=True)
+                  ok = db.execute("PRAGMA integrity_check").fetchone()[0]
+                  tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+                  print(f"[restore] {name} integrity={ok} tables={len(tables)}")
+                  if ok != "ok" or not tables:
+                      raise SystemExit(f"{name} copy is not usable")
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
