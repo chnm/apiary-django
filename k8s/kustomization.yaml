@@ -6,6 +6,7 @@ namespace: apiary
 resources:
 - app-deploy.yaml
 - bom.yaml
+- mcp-route.yaml
 - netpol.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
@@ -42,11 +43,6 @@ configMapGenerator:
 # the same developer Postgres. The copy holds PostgreSQL only; the SQLite projects are not copied.
 # The component's sanitize.sql covers users, sessions, allauth and the admin
 # log; app tables (relec contributor names included) are copied as-is.
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local bom volume.
-            # Its env and envFrom are copied from the app container (replacements).
-# HTTPRoute rules have no merge key, so add the /mcp rule rather than merge.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -107,17 +103,6 @@ patches:
         - { name: mcp, port: 8001, targetPort: mcp, protocol: TCP }
   target:
     kind: Service
-    name: app
-- patch: |-
-    - op: add
-      path: /spec/rules/0
-      value:
-        matches:
-          - path: { type: PathPrefix, value: /mcp }
-        backendRefs:
-          - { kind: Service, name: app, port: 8001 }
-  target:
-    kind: HTTPRoute
     name: app
 - patch: |-
     apiVersion: batch/v1
@@ -202,8 +187,9 @@ patches:
     name: developer-refresh
 
 # Copy the pinned digest into IMAGE_DIGEST and the developer-copy record. Must
-# live here: replacements in components run before `images:` below.
-# Last, so the MCP container's copy includes the IMAGE_DIGEST set above.
+# live here: replacements in components run before `images:` below. The MCP
+# container's env copies come last, so they include IMAGE_DIGEST. The /mcp
+# route takes the app route's hostnames and gateway.
 replacements:
 - source:
     fieldPath: spec.template.spec.containers.[name=app].image
@@ -252,6 +238,26 @@ replacements:
     select:
       kind: Deployment
       name: app
+- source:
+    fieldPath: spec.hostnames
+    kind: HTTPRoute
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.hostnames
+    select:
+      kind: HTTPRoute
+      name: mcp
+- source:
+    fieldPath: spec.parentRefs
+    kind: HTTPRoute
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.parentRefs
+    select:
+      kind: HTTPRoute
+      name: mcp
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
