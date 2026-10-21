@@ -18,7 +18,13 @@ def show_toolbar(request):
 
 # https://django-debug-toolbar.readthedocs.io/en/latest/configuration.html#debug-toolbar-config
 DEBUG_TOOLBAR_CONFIG = {
-    "DISABLE_PANELS": ["debug_toolbar.panels.redirects.RedirectsPanel"],
+    # Overriding DISABLE_PANELS drops the toolbar's default of disabling the
+    # profiling panel. cProfile allows one active profiler per process, so
+    # overlapping threaded requests fail; toggle it on per request instead.
+    "DISABLE_PANELS": [
+        "debug_toolbar.panels.redirects.RedirectsPanel",
+        "debug_toolbar.panels.profiling.ProfilingPanel",
+    ],
     "SHOW_TEMPLATE_CONTEXT": True,
     "SHOW_TOOLBAR_CALLBACK": show_toolbar,
 }

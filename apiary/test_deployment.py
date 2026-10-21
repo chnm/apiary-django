@@ -198,3 +198,13 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
         self.assertIn("First 100 of 101 rows.", html)
         self.assertNotIn("<script", html)
         self.assertNotIn("<style", html)
+
+    def test_debug_toolbar_keeps_profiling_panel_off_by_default(self):
+        # Threaded runserver and gthread workers run requests concurrently, and
+        # cProfile raises "Another profiling tool is already active".
+        from django.conf import settings
+
+        self.assertIn(
+            "debug_toolbar.panels.profiling.ProfilingPanel",
+            settings.DEBUG_TOOLBAR_CONFIG["DISABLE_PANELS"],
+        )
