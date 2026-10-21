@@ -5,7 +5,7 @@ namespace: apiary
 
 resources:
 - app-deploy.yaml
-- bom.yaml
+- sqlite.yaml
 - mcp-route.yaml
 - netpol.yaml
 
@@ -59,10 +59,10 @@ patches:
                 requests: { cpu: 100m, memory: 256Mi }
                 limits: { cpu: "1", memory: 1Gi }
               volumeMounts:
-                - { name: bom, mountPath: /data }
+                - { name: sqlite, mountPath: /data }
             # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
             # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local bom volume.
+            # because it reads the SQLite files on the node-local sqlite volume.
             # Its env and envFrom are copied from the app container (replacements).
             - name: mcp
               image: app
@@ -86,11 +86,11 @@ patches:
                 requests: { cpu: 50m, memory: 128Mi }
                 limits: { cpu: 500m, memory: 384Mi }
               volumeMounts:
-                - { name: bom, mountPath: /data }
+                - { name: sqlite, mountPath: /data }
                 - { name: tmp, mountPath: /tmp }
           volumes:
-            - name: bom
-              persistentVolumeClaim: { claimName: bom }
+            - name: sqlite
+              persistentVolumeClaim: { claimName: sqlite }
   target:
     kind: Deployment
     name: app
@@ -118,10 +118,10 @@ patches:
                 requests: { cpu: 50m, memory: 192Mi }
                 limits: { cpu: "1", memory: 512Mi }
               volumeMounts:
-                - { name: bom, mountPath: /data }
+                - { name: sqlite, mountPath: /data }
           volumes:
-            - name: bom
-              persistentVolumeClaim: { claimName: bom }
+            - name: sqlite
+              persistentVolumeClaim: { claimName: sqlite }
   target:
     kind: Job
     name: migrate
@@ -168,11 +168,11 @@ patches:
                     requests: { cpu: 50m, memory: 64Mi }
                     limits: { cpu: 500m, memory: 256Mi }
                   volumeMounts:
-                    - { name: bom, mountPath: /data, readOnly: true }
+                    - { name: sqlite, mountPath: /data, readOnly: true }
                     - { name: dump, mountPath: /dump }
               volumes:
-                - name: bom
-                  persistentVolumeClaim: { claimName: bom, readOnly: true }
+                - name: sqlite
+                  persistentVolumeClaim: { claimName: sqlite, readOnly: true }
   target:
     kind: CronJob
     name: postgres-backup
