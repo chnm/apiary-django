@@ -1,6 +1,7 @@
 ---
-# BOM's SQLite database, mounted at /data by the app and the migrate Job, and
-# read by the nightly backup (patches in kustomization.yaml).
+# The BOM and Pinkertons SQLite databases, mounted at /data by the app and the
+# migrate Job, and read by the nightly backup (patches in kustomization.yaml).
+# Named before Pinkertons existed; renaming the claim would orphan its data.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

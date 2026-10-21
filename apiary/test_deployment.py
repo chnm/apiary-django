@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, override_settings
 @override_settings(SECURE_SSL_REDIRECT=False)
 class DeploymentTests(SimpleTestCase):
     def test_health_checks_every_database_and_fails_closed(self):
-        aliases = ("default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db")
+        aliases = ("default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db")
         databases = {alias: MagicMock() for alias in aliases}
         with patch("apiary.health.connections", databases):
             self.assertEqual(self.client.get("/health/").status_code, 200)
@@ -31,7 +31,7 @@ class DeploymentTests(SimpleTestCase):
             for app in ("bom", "connthreads", "mappingviolence", "relec")
         ])
         self.assertEqual([call.kwargs["database"] for call in migrate.call_args_list], [
-            "default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db",
+            "default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db",
         ])
         self.assertTrue(all(call.args[0] == "migrate" for call in migrate.call_args_list))
 
@@ -67,6 +67,7 @@ class DeploymentTests(SimpleTestCase):
         environment = {
             **os.environ, "DEBUG": "False", "OBJ_STORAGE": "False",
             "DJANGO_SECRET_KEY": "test-only", "BOM_DB_PATH": "/data/bom.sqlite3",
+            "PINKERTONS_DB_PATH": "/data/pinkertons.sqlite3",
             "DJANGO_CSRF_TRUSTED_ORIGINS": "https://workspaces.apiary.rrchnm.org",
         }
         subprocess.run([sys.executable, "-c", """
@@ -78,6 +79,7 @@ assert settings.OBJ_STORAGE is False
 assert settings.SESSION_COOKIE_SECURE
 assert settings.CSRF_COOKIE_SECURE
 assert settings.DATABASES["bom_db"]["NAME"] == "/data/bom.sqlite3"
+assert settings.DATABASES["pinkertons_db"]["NAME"] == "/data/pinkertons.sqlite3"
 assert settings.CSRF_TRUSTED_ORIGINS == ["https://workspaces.apiary.rrchnm.org"]
 """], env={**environment, "DJANGO_SETTINGS_MODULE": "apiary.settings"}, check=True)
 
@@ -157,7 +159,8 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
         from django.db import router
 
         projects = {"bom": "bom_db", "connthreads": "connthreads_db",
-                    "mappingviolence": "mappingviolence_db", "relec": "relec_db"}
+                    "mappingviolence": "mappingviolence_db", "relec": "relec_db",
+                    "pinkertons": "pinkertons_db"}
         for db in ("default", *projects.values()):
             for app in ("apiary", "auth", "account", "socialaccount", *projects):
                 expected = projects.get(app, "default") == db
@@ -191,9 +194,9 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
             response = views.project_tables_page(request)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        for name in ("Death by Numbers", "Connecting Threads", "Mapping Violence", "Religious Ecologies"):
+        for name in ("Death by Numbers", "Connecting Threads", "Mapping Violence", "Religious Ecologies", "Pinkertons"):
             self.assertIn(name, html)
-        for table in ("mortalitybill", "textile", "witness", "denomination", "schedule"):
+        for table in ("mortalitybill", "textile", "witness", "denomination", "schedule", "activity", "location"):
             self.assertIn(f"<code>{table}</code>", html)
         self.assertIn("First 100 of 101 rows.", html)
         self.assertNotIn("<script", html)

@@ -26,6 +26,7 @@ services:
                uv run manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
                uv run manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
                uv run manage.py migrate relec --database=relec_db --verbosity=1 &&
+               uv run manage.py migrate pinkertons --database=pinkertons_db --verbosity=1 &&
                uv run manage.py runserver 0.0.0.0:8000"
     {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
 

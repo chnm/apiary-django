@@ -194,6 +194,31 @@ UNFOLD = {
                 ],
             },
             {
+                "title": "Pinkertons",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Overview",
+                        "icon": "dashboard",
+                        "link": lambda request: "/admin/pinkertons/",
+                        "permission": lambda request: request.user.groups.filter(name='pinkertons-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Activities",
+                        "icon": "visibility",
+                        "link": lambda request: "/admin/pinkertons/activity/",
+                        "permission": lambda request: request.user.groups.filter(name='pinkertons-viewer').exists() or request.user.is_superuser,
+                    },
+                    {
+                        "title": "Locations",
+                        "icon": "location_on",
+                        "link": lambda request: "/admin/pinkertons/location/",
+                        "permission": lambda request: request.user.groups.filter(name='pinkertons-viewer').exists() or request.user.is_superuser,
+                    },
+                ],
+            },
+            {
                 "title": "System Administration",
                 "separator": True,
                 "collapsible": True,
@@ -303,6 +328,22 @@ UNFOLD = {
                 {
                     "title": "Schedules",
                     "link": "/admin/relec/schedule/",
+                },
+            ],
+        },
+        {
+            "models": [
+                "pinkertons.activity",
+                "pinkertons.location",
+            ],
+            "items": [
+                {
+                    "title": "Activities",
+                    "link": "/admin/pinkertons/activity/",
+                },
+                {
+                    "title": "Locations",
+                    "link": "/admin/pinkertons/location/",
                 },
             ],
         },

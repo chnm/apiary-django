@@ -21,6 +21,7 @@ components:
 configMapGenerator:
 - literals:
   - BOM_DB_PATH=/data/bom.sqlite3
+  - PINKERTONS_DB_PATH=/data/pinkertons.sqlite3
   - OBJ_STORAGE=True
   - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
   - OBJ_STORAGE_REGION=rrchnm
@@ -32,13 +33,13 @@ configMapGenerator:
 
   # One replica on node-local SQLite: never two writers. Move BOM to PostgreSQL
   # before scaling horizontally.
-  # Project schemas + BOM, then the idempotent superuser bootstrap.
-  # 02:45 ET, before the 03:30 canary and forge runs. Also back up the BOM
-  # SQLite: SQLite's online backup API on a read-only open (Django's SQLite
+  # Project schemas + the SQLite projects, then the idempotent superuser bootstrap.
+  # 02:45 ET, before the 03:30 canary and forge runs. Also back up the
+  # BOM and Pinkertons SQLite files: SQLite's online backup API on a read-only open (Django's SQLite
   # backend uses the rollback journal, so a reader needs no -shm file), checked
   # with integrity_check, using the app's own image.
 # 05:45 ET: after the 02:45 backup, and clear of the canary's 05:15 refresh on
-# the same developer Postgres. The copy holds PostgreSQL only; BOM stays SQLite.
+# the same developer Postgres. The copy holds PostgreSQL only; the SQLite projects are not copied.
 # The component's sanitize.sql covers users, sessions, allauth and the admin
 # log; app tables (relec contributor names included) are copied as-is.
 patches:
@@ -109,13 +110,14 @@ patches:
                   args:
                     - |
                       import sqlite3
-                      src = sqlite3.connect("file:/data/bom.sqlite3?mode=ro", uri=True)
-                      dst = sqlite3.connect("/dump/bom.sqlite3")
-                      src.backup(dst)
-                      ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
-                      if ok != "ok":
-                          raise SystemExit(f"BOM copy failed integrity_check: {ok}")
-                      print("[backup] bom.sqlite3 copied, integrity ok")
+                      for name in ("bom.sqlite3", "pinkertons.sqlite3"):
+                          src = sqlite3.connect(f"file:/data/{name}?mode=ro", uri=True)
+                          dst = sqlite3.connect(f"/dump/{name}")
+                          src.backup(dst)
+                          ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
+                          if ok != "ok":
+                              raise SystemExit(f"{name} copy failed integrity_check: {ok}")
+                          print(f"[backup] {name} copied, integrity ok")
                   securityContext:
                     runAsNonRoot: true
                     runAsUser: 10001

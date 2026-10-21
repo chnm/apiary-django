@@ -20,7 +20,7 @@ class StatusTests(SimpleTestCase):
     def test_snapshot_reports_every_database_and_storage(self):
         s = snapshot()
         self.assertTrue(s["ok"], s)
-        self.assertEqual(set(s["databases"]), {"default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db"})
+        self.assertEqual(set(s["databases"]), {"default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db"})
         self.assertEqual(set(s["media"]), {"public", "private"})
 
     def test_a_failing_check_degrades_the_snapshot_instead_of_raising(self):

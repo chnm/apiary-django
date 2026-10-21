@@ -52,6 +52,9 @@ services:
                uv run manage.py loaddata denominations.json --database=relec_db --verbosity=1 &&
                uv run manage.py loaddata schedules.json --database=relec_db --verbosity=1 &&
 
+               uv run manage.py migrate pinkertons --database=pinkertons_db --verbosity=1 &&
+               uv run manage.py loaddata activities.json --database=pinkertons_db --verbosity=1 &&
+
                uv run manage.py init_project_groups && 
                uv run manage.py loaddata users.yaml --database=default --verbosity=1 &&
                uv run manage.py init_superuser && 
