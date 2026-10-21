@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apiary projects</title>
+</head>
+<body>
+    <h1>Apiary projects</h1>
+    <ul>
+        {% for project in projects %}
+            <li><a href="#{{ project.label }}">{{ project.name }}</a></li>
+        {% endfor %}
+    </ul>
+    {% for project in projects %}
+        <section id="{{ project.label }}">
+            <h2>{{ project.name }}</h2>
+            {% for table in project.tables %}
+                <h3>{{ table.name|capfirst }} <code>{{ table.db_table }}</code></h3>
+                <p>{% if table.count > limit %}First {{ limit }} of {{ table.count }} rows.{% else %}{{ table.count }} row{{ table.count|pluralize }}.{% endif %}</p>
+                {% if table.rows %}
+                    <table border="1">
+                        <thead>
+                            <tr>{% for column in table.columns %}<th>{{ column }}</th>{% endfor %}</tr>
+                        </thead>
+                        <tbody>
+                            {% for row in table.rows %}
+                                <tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% endif %}
+            {% empty %}
+                <p>No tables.</p>
+            {% endfor %}
+        </section>
+    {% endfor %}
+</body>
+</html>

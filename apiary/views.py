@@ -7,6 +7,7 @@ import time
 import sys
 import json
 from pathlib import Path
+from django.apps import apps
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.storage import storages
@@ -42,6 +43,38 @@ ALLOWED_COMMANDS = {
         'timeout': 30
     },
 }
+
+PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec')
+ROW_LIMIT = 100
+
+
+@staff_member_required
+def project_tables_page(request):
+    """
+    Show every project model as a plain table, capped at ROW_LIMIT rows each.
+
+    Restricted to staff because project data is not public.
+    """
+    projects = []
+    for label in PROJECT_APPS:
+        config = apps.get_app_config(label)
+        tables = []
+        for model in config.get_models():
+            fields = model._meta.concrete_fields
+            queryset = model.objects.order_by('pk')
+            tables.append({
+                'name': model._meta.verbose_name_plural,
+                'db_table': model._meta.db_table,
+                'columns': [field.verbose_name for field in fields],
+                'rows': [
+                    [field.value_from_object(obj) for field in fields]
+                    for obj in queryset[:ROW_LIMIT]
+                ],
+                'count': queryset.count(),
+            })
+        projects.append({'label': label, 'name': config.verbose_name, 'tables': tables})
+    return render(request, 'project-tables.html', {'projects': projects, 'limit': ROW_LIMIT})
+
 
 @staff_member_required
 def whoami_page(request):

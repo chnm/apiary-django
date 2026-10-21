@@ -170,3 +170,31 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
         from django.conf import settings
 
         zoneinfo.ZoneInfo(settings.TIME_ZONE)
+
+    def test_root_page_lists_each_project_table_for_staff_only(self):
+        from django.contrib.auth.models import AnonymousUser
+        from django.db.models.query import QuerySet
+        from django.test import RequestFactory
+
+        from apiary import views
+
+        def fetch(queryset):
+            if queryset._result_cache is None:
+                queryset._result_cache = [queryset.model(pk=1)]
+
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        self.assertEqual(views.project_tables_page(request).status_code, 302)
+
+        request.user = MagicMock(is_active=True, is_staff=True)
+        with patch.object(QuerySet, "_fetch_all", fetch), patch.object(QuerySet, "count", return_value=101):
+            response = views.project_tables_page(request)
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        for name in ("Death by Numbers", "Connecting Threads", "Mapping Violence", "Religious Ecologies"):
+            self.assertIn(name, html)
+        for table in ("mortalitybill", "textile", "witness", "denomination", "schedule"):
+            self.assertIn(f"<code>{table}</code>", html)
+        self.assertIn("First 100 of 101 rows.", html)
+        self.assertNotIn("<script", html)
+        self.assertNotIn("<style", html)
