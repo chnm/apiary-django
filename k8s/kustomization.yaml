@@ -47,6 +47,10 @@ configMapGenerator:
             # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
             # because it reads the SQLite files on the node-local sqlite volume.
             # Its env and envFrom are copied from the app container (replacements).
+            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
+            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
+            # because it reads the SQLite files on the node-local sqlite volume.
+            # Its env and envFrom are copied from the app container (replacements).
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -270,5 +274,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:40abb330f069e9017bd99c4bd926d172961defa9716483c910f7601d5d43ef68
+- digest: sha256:896e9e71f6248c296d67b697b0c80860b4257d604342797b28fe9a1224fd5be6
   name: oci.rrchnm.internal/rrchnm/apiary-django
