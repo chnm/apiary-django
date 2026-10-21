@@ -174,7 +174,7 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
 
         zoneinfo.ZoneInfo(settings.TIME_ZONE)
 
-    def test_root_page_lists_each_project_table_for_staff_only(self):
+    def test_root_page_shows_each_project_three_ways_for_staff_only(self):
         from django.contrib.auth.models import AnonymousUser
         from django.db.models.query import QuerySet
         from django.test import RequestFactory
@@ -189,17 +189,24 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
         request.user = AnonymousUser()
         self.assertEqual(views.project_tables_page(request).status_code, 302)
 
+        # Test settings make every alias SQLite; name each backend after its alias instead.
+        backends = {f"{label}_db": MagicMock(display_name=f"{label}-engine") for label in views.PROJECT_APPS}
         request.user = MagicMock(is_active=True, is_staff=True)
-        with patch.object(QuerySet, "_fetch_all", fetch), patch.object(QuerySet, "count", return_value=101):
+        with patch.object(QuerySet, "_fetch_all", fetch), patch.object(QuerySet, "count", return_value=101), \
+                patch("apiary.views.connections", backends):
             response = views.project_tables_page(request)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
         for name in ("Death by Numbers", "Connecting Threads", "Mapping Violence", "Religious Ecologies", "Pinkertons"):
             self.assertIn(name, html)
+        for label in views.PROJECT_APPS:
+            self.assertIn(f"Database: {label}-engine (<code>{label}_db</code>)", html)
+            self.assertIn(f'data-drf="/api/{label}/v1/', html)
+            self.assertIn(f'data-chart="/api/{label}/v1/datasets/', html)
         for table in ("mortalitybill", "textile", "witness", "denomination", "schedule", "activity", "location"):
             self.assertIn(f"<code>{table}</code>", html)
         self.assertIn("First 100 of 101 rows.", html)
-        self.assertNotIn("<script", html)
+        self.assertIn('src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-', html)
         self.assertNotIn("<style", html)
 
     def test_debug_toolbar_keeps_profiling_panel_off_by_default(self):

@@ -1,20 +1,23 @@
 import debug_toolbar
-from rest_framework.routers import DefaultRouter
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 
 from apiary import views
+from apiary.api import crud, datasets
 from apiary.health import health
-
-router = DefaultRouter()
 
 urlpatterns = [
     path("", views.project_tables_page, name="apiary_project_tables_page"),
     path("health/", health),
     path("admin/", admin.site.urls),
     path('accounts/', include('allauth.urls')),
-    path('api/', include(router.urls)),
+    path('api/schema/', SpectacularAPIView.as_view(), name='api_schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='api_schema'), name='api_docs'),
+    # DRF first: both claim /api/ as their root, and DRF's lists every model.
+    path('api/', include(crud.router.urls)),
+    path('api/', datasets.api.urls),
     path('apiary/whoami/', views.whoami_page, name='apiary_whoami_page'),
     path('apiary/mgmt/', views.management_commands_dashboard, name='apiary_management_commands_dashboard'),
     path('apiary/run-command/', views.run_management_command, name='run_management_command'),

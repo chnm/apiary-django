@@ -8,6 +8,8 @@ import sys
 import json
 from pathlib import Path
 from django.apps import apps
+from django.db import connections, router
+from django.urls import reverse
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.storage import storages
@@ -46,12 +48,21 @@ ALLOWED_COMMANDS = {
 
 PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec', 'pinkertons')
 ROW_LIMIT = 100
+# Root page D3 sample per project: Ninja dataset, label fields, value field.
+SAMPLE_CHARTS = {
+    'bom': ('deaths_by_year', ['year', 'type'], 'deaths'),
+    'connthreads': ('circulation_by_year', ['year', 'type'], 'circulation'),
+    'mappingviolence': ('testimonies_by_month', ['month', 'crime'], 'testimonies'),
+    'relec': ('denominations_by_family', ['family'], 'denominations'),
+    'pinkertons': ('activities_by_month', ['month', 'investigation'], 'activities'),
+}
 
 
 @staff_member_required
 def project_tables_page(request):
     """
-    Show every project model as a plain table, capped at ROW_LIMIT rows each.
+    Show every project model as a plain table, capped at ROW_LIMIT rows each,
+    with its database backend and client-side DRF and Ninja API samples.
 
     Restricted to staff because project data is not public.
     """
@@ -72,7 +83,22 @@ def project_tables_page(request):
                 ],
                 'count': queryset.count(),
             })
-        projects.append({'label': label, 'name': config.verbose_name, 'tables': tables})
+        first = next(config.get_models())
+        alias = router.db_for_read(first)
+        dataset, label_fields, value_field = SAMPLE_CHARTS[label]
+        projects.append({
+            'label': label,
+            'name': config.verbose_name,
+            'database': connections[alias].display_name,
+            'alias': alias,
+            'tables': tables,
+            'drf_url': reverse(f'{label}-{first._meta.model_name}-list'),
+            'chart': {
+                'url': reverse(f'datasets:{label}_{dataset}'),
+                'label': ','.join(label_fields),
+                'value': value_field,
+            },
+        })
     return render(request, 'project-tables.html', {'projects': projects, 'limit': ROW_LIMIT})
 
 
