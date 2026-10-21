@@ -1,0 +1,18 @@
+# /mcp to the MCP container (Service port 8001). A route of its own, not a rule
+# in the component's app route: the Argo app sets RespectIgnoreDifferences on
+# .spec.rules[].backendRefs[], so an apply keeps the live rules list and an
+# added rule never lands. The gateway prefers this longer path over app's /.
+# Hostnames and parentRefs are copied from the app route (kustomization.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  parentRefs: []
+  hostnames: []
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: /mcp }
+      backendRefs:
+        - { group: "", kind: Service, name: app, port: 8001, weight: 1 }
