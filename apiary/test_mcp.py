@@ -104,19 +104,30 @@ class McpServerTests(TransactionTestCase):
                                 group_by=["location__locality"])
         self.assertEqual(rows["rows"], [{"location__locality": "Manhattan, NYC", "value": 2}])
 
-    def test_rejects_paths_outside_the_project_and_bad_input(self):
-        for tool, arguments in [
-            ("query_records", {"project": "auth", "model": "user"}),
-            ("query_records", {"project": "bom", "model": "user"}),
-            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"nope": 1}}),
-            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"year__regex": "."}}),
-            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"year": "abc"}}),
-            ("query_records", {"project": "bom", "model": "mortalitybill", "order_by": ["password"]}),
-            ("aggregate", {"project": "bom", "model": "mortalitybill", "metric": "sum"}),
-            ("get_record", {"project": "bom", "model": "mortalitybill", "id": 999}),
+    def test_rejects_bad_input_with_a_message_the_agent_can_act_on(self):
+        # The SDK hides any message but a ToolError's: "Error executing tool" alone
+        # gives the agent nothing to correct.
+        for tool, arguments, message in [
+            ("query_records", {"project": "connthreads", "model": "textiles"},
+             "Unknown model 'textiles' in connthreads; one of textile."),
+            ("query_records", {"project": "auth", "model": "user"}, "Unknown project 'auth'"),
+            ("query_records", {"project": "bom", "model": "user"}, "Unknown model 'user'"),
+            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"nope": 1}},
+             "Unknown field 'nope'"),
+            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"year__regex": "."}},
+             "Unsupported lookup 'regex' on 'year'"),
+            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"year": "abc"}},
+             "expected a number but got 'abc'"),
+            ("query_records", {"project": "bom", "model": "mortalitybill", "filters": {"year__type__exact": 1}},
+             "'year' on mortalitybill is not a relation."),
+            ("query_records", {"project": "bom", "model": "mortalitybill", "order_by": ["password"]},
+             "Unknown field 'password'"),
+            ("aggregate", {"project": "bom", "model": "mortalitybill", "metric": "sum"}, "sum needs a field."),
+            ("get_record", {"project": "bom", "model": "mortalitybill", "id": 999}, "No mortalitybill with id 999"),
         ]:
-            error, message = self.call(tool, **arguments)
-            self.assertTrue(error, (tool, arguments, message))
+            error, text = self.call(tool, **arguments)
+            self.assertTrue(error, (tool, arguments, text))
+            self.assertIn(message, text, (tool, arguments))
 
 
 class ApiTokenAdminTests(TestCase):

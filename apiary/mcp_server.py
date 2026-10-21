@@ -28,6 +28,7 @@ from django.db.models import Avg, Count, Max, Min, Sum  # noqa: E402
 from mcp.server import MCPServer  # noqa: E402
 from mcp.server.auth.provider import AccessToken  # noqa: E402
 from mcp.server.auth.settings import AuthSettings  # noqa: E402
+from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 
 from apiary.models import APIToken  # noqa: E402
@@ -76,10 +77,10 @@ class APITokenVerifier:
 
 def get_model(project, model):
     if project not in PROJECT_APPS:
-        raise ValueError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
+        raise ToolError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
     models = {m._meta.model_name: m for m in apps.get_app_config(project).get_models()}
     if model not in models:
-        raise ValueError(f"Unknown model {model!r} in {project}; one of {', '.join(models)}.")
+        raise ToolError(f"Unknown model {model!r} in {project}; one of {', '.join(models)}.")
     return models[model]
 
 
@@ -97,13 +98,18 @@ def check_path(model, path, lookups=False):
         except FieldDoesNotExist:
             if lookups and last and i > 0 and part in LOOKUPS:
                 return
-            raise ValueError(f"Unknown field {part!r} on {current._meta.model_name}.")
+            raise ToolError(f"Unknown field {part!r} on {current._meta.model_name}.")
         if field.is_relation:
             if field.related_model._meta.app_label != model._meta.app_label:
-                raise ValueError(f"{part!r} leaves the {model._meta.app_label} project.")
+                raise ToolError(f"{part!r} leaves the {model._meta.app_label} project.")
             current = field.related_model
-        elif not last and not (lookups and i == len(parts) - 2 and parts[-1] in LOOKUPS):
-            raise ValueError(f"{part!r} on {current._meta.model_name} is not a relation.")
+        elif not last:
+            rest = parts[i + 1:]
+            if lookups and len(rest) == 1:
+                if rest[0] in LOOKUPS:
+                    return
+                raise ToolError(f"Unsupported lookup {rest[0]!r} on {part!r}; one of {', '.join(sorted(LOOKUPS))}.")
+            raise ToolError(f"{part!r} on {current._meta.model_name} is not a relation.")
 
 
 def filtered(model, filters):
@@ -113,11 +119,15 @@ def filtered(model, filters):
 
 
 def evaluate(fn):
-    """Report bad filters and values to the agent instead of failing the call."""
+    """
+    Report bad filters and values to the agent. The SDK passes only a
+    ToolError's message to the client; any other exception reaches it as a
+    bare "Error executing tool".
+    """
     try:
         return fn()
-    except (FieldError, ValidationError, TypeError) as error:
-        raise ValueError(str(error)) from error
+    except (FieldError, ValidationError, TypeError, ValueError) as error:
+        raise ToolError(str(error)) from error
 
 
 def describe(project):
@@ -194,7 +204,7 @@ async def get_record(project: str, model: str, id: int) -> dict:
         names = [field.name for field in target._meta.concrete_fields]
         record = target.objects.filter(pk=id).values(*names).first()
         if record is None:
-            raise ValueError(f"No {model} with id {id} in {project}.")
+            raise ToolError(f"No {model} with id {id} in {project}.")
         return jsonable(record)
     return await orm(lambda: evaluate(run))()
 
@@ -217,7 +227,7 @@ async def aggregate(
     def run():
         target = get_model(project, model)
         if metric != "count" and not field:
-            raise ValueError(f"{metric} needs a field.")
+            raise ToolError(f"{metric} needs a field.")
         for path in [*(group_by or []), *([field] if field else [])]:
             check_path(target, path)
         records = filtered(target, filters)
