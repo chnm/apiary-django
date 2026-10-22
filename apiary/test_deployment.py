@@ -1,3 +1,4 @@
+import threading
 from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
@@ -7,6 +8,9 @@ from django.test import SimpleTestCase, override_settings
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class DeploymentTests(SimpleTestCase):
+    def test_threads_get_a_glibc_sized_stack_on_musl(self):
+        self.assertEqual(threading.stack_size(), 8 * 1024 * 1024)
+
     def test_health_checks_every_database_and_fails_closed(self):
         aliases = ("default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db")
         databases = {alias: MagicMock() for alias in aliases}
