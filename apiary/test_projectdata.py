@@ -47,7 +47,7 @@ class SnapshotTests(TestCase):
     def test_consistent_read_runs_alongside(self):
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
         snapshot, total = projectdata.take_snapshot(
-            "bom", kind="page", during=lambda alias: MortalityBill.objects.using(alias).count())
+            "bom", kind="site", during=lambda alias: MortalityBill.objects.using(alias).count())
         self.assertEqual((total, snapshot.row_counts), (1, {"mortalitybill": 1}))
 
     def test_refuses_another_schema(self):

@@ -99,7 +99,7 @@ class PruneTests(TestCase):
 
     def test_prunes_only_old_automatic_unused_snapshots(self):
         manual = self.snapshot("manual", 90)
-        used = self.snapshot("page", 90)
+        used = self.snapshot("site", 90)
         site = Site.objects.create(project="bom", name="s")
         SiteVersion.objects.create(site=site, number=1, data_snapshot=used)
         old = [self.snapshot("pre-reset", 60 + i) for i in range(3)]

@@ -7,7 +7,7 @@ Django itself stays WSGI:
     uvicorn apiary.mcp_server:app --host 0.0.0.0 --port 8001
 
 Agents authenticate with an APIToken as a bearer token. Every token may read
-every project for now; the site tools (apiary.pages) need a staff user.
+every project for now; the site tools (apiary.sites) need a staff user.
 """
 import base64
 import binascii
@@ -34,7 +34,7 @@ from mcp.server.auth.settings import AuthSettings  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 
-from apiary import pages  # noqa: E402
+from apiary import sites  # noqa: E402
 from apiary.api.datasets import api as datasets_api  # noqa: E402
 from apiary.models import APIToken  # noqa: E402
 from apiary.views import PROJECT_APPS  # noqa: E402
@@ -159,8 +159,8 @@ mcp = MCPServer(
     name="apiary",
     instructions=(
         "Read access to the Apiary digital humanities projects' data: call list_projects first "
-        "for each project's models and fields. Staff can also publish static sites to the pages "
-        "host: create_site, put_files (index.html required), attach_dataset to freeze a dataset "
+        "for each project's models and fields. Staff can also publish static sites, each on its "
+        "own host (<name>.sites.rrchnm.org): create_site, put_files (index.html required), attach_dataset to freeze a dataset "
         "into the site as JSON, then publish_site. Sites are versioned: rollback_site restores one."
     ),
     token_verifier=APITokenVerifier(),
@@ -260,11 +260,11 @@ def current_user(staff=False):
 
 
 def site_tool(fn):
-    """Run fn(user, ...) for a staff user, reporting pages errors to the agent."""
+    """Run fn(user, ...) for a staff user, reporting site errors to the agent."""
     def run(*args, **kwargs):
         try:
             return fn(current_user(staff=True), *args, **kwargs)
-        except pages.PagesError as error:
+        except sites.SiteError as error:
             raise ToolError(str(error)) from error
     return orm(run)
 
@@ -292,18 +292,22 @@ async def list_sites(project: str | None = None) -> dict:
     def run():
         from apiary.models import Site
 
-        sites = Site.objects.order_by("project", "name").prefetch_related("versions")
+        found = Site.objects.order_by("project", "name").prefetch_related("versions")
         if project:
-            sites = sites.filter(project=project)
-        return {"sites": [pages.describe(site) for site in sites]}
+            found = found.filter(project=project)
+        return {"sites": [sites.describe(site) for site in found]}
     return await orm(run)()
 
 
 @mcp.tool()
 async def create_site(project: str, name: str, title: str = "") -> dict:
-    """Create an empty static site at <pages host>/<project>/<name>/. Staff only."""
+    """
+    Create an empty static site for a project, served at <name>.sites.rrchnm.org.
+    Names are unique across projects: lowercase letters, digits and inner
+    hyphens. Staff only.
+    """
     def run(user):
-        return pages.describe(pages.create_site(project, name, title=title, user=user))
+        return sites.describe(sites.create_site(project, name, title=title, user=user))
     return await site_tool(run)()
 
 
@@ -319,13 +323,13 @@ async def put_files(project: str, site: str, files: list[dict[str, str]]) -> dic
         decoded = {}
         for item in files:
             if "path" not in item or "content" not in item:
-                raise pages.PagesError('Each file needs "path" and "content".')
+                raise sites.SiteError('Each file needs "path" and "content".')
             try:
                 decoded[item["path"]] = (base64.b64decode(item["content"], validate=True)
                                          if item.get("encoding") == "base64" else item["content"].encode())
             except binascii.Error:
-                raise pages.PagesError(f"{item['path']!r}: content is not valid base64.")
-        version = pages.put_files(pages.get_site(project, site), decoded, user=user)
+                raise sites.SiteError(f"{item['path']!r}: content is not valid base64.")
+        version = sites.put_files(sites.get_site(project, site), decoded, user=user)
         return {"draft_version": version.number, "files": sorted(version.files)}
     return await site_tool(run)()
 
@@ -334,7 +338,7 @@ async def put_files(project: str, site: str, files: list[dict[str, str]]) -> dic
 async def delete_files(project: str, site: str, paths: list[str]) -> dict:
     """Remove files (or attached datasets) from the site's draft. Staff only."""
     def run(user):
-        version = pages.delete_files(pages.get_site(project, site), paths, user=user)
+        version = sites.delete_files(sites.get_site(project, site), paths, user=user)
         return {"draft_version": version.number, "files": sorted(version.files), "datasets": version.datasets}
     return await site_tool(run)()
 
@@ -348,7 +352,7 @@ async def attach_dataset(project: str, site: str, dataset: str,
     page fetches it relatively, e.g. fetch("data/deaths-by-year.json"). Staff only.
     """
     def run(user):
-        version = pages.attach_dataset(pages.get_site(project, site), dataset, params=params, path=path, user=user)
+        version = sites.attach_dataset(sites.get_site(project, site), dataset, params=params, path=path, user=user)
         return {"draft_version": version.number, "datasets": version.datasets}
     return await site_tool(run)()
 
@@ -360,9 +364,9 @@ async def publish_site(project: str, site: str) -> dict:
     from the same moment, then make it the live version. Returns the URL. Staff only.
     """
     def run(user):
-        target = pages.get_site(project, site)
-        version = pages.publish(target, user=user)
-        return {"url": pages.site_url(target), "version": version.number,
+        target = sites.get_site(project, site)
+        version = sites.publish(target, user=user)
+        return {"url": sites.site_url(target), "version": version.number,
                 "data_snapshot": version.data_snapshot_id, "files": sorted(version.files)}
     return await site_tool(run)()
 
@@ -371,9 +375,9 @@ async def publish_site(project: str, site: str) -> dict:
 async def rollback_site(project: str, site: str, version: int) -> dict:
     """Make an earlier published version live again. Staff only."""
     def run(user):
-        target = pages.get_site(project, site)
-        pages.rollback(target, version)
-        return {"url": pages.site_url(target), "live_version": version}
+        target = sites.get_site(project, site)
+        sites.rollback(target, version)
+        return {"url": sites.site_url(target), "live_version": version}
     return await site_tool(run)()
 
 
@@ -381,9 +385,9 @@ async def rollback_site(project: str, site: str, version: int) -> dict:
 async def unpublish_site(project: str, site: str) -> dict:
     """Take the site offline; its versions are kept. Staff only."""
     def run(user):
-        target = pages.get_site(project, site)
-        pages.unpublish(target)
-        return {"url": pages.site_url(target), "live_version": None}
+        target = sites.get_site(project, site)
+        sites.unpublish(target)
+        return {"url": sites.site_url(target), "live_version": None}
     return await site_tool(run)()
 
 
@@ -393,7 +397,9 @@ def transport_security():
     wildcard there can't be expressed in the SDK's patterns; bearer auth
     still protects the endpoint.
     """
-    hosts = list(settings.ALLOWED_HOSTS)
+    # The site hosts never serve /mcp: leave them out, or their wildcard would
+    # switch the check off.
+    hosts = [host for host in settings.ALLOWED_HOSTS if host != f".{settings.SITES_DOMAIN}"]
     if not hosts or any(host == "*" or host.startswith(".") for host in hosts):
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(

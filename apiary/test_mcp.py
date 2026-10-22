@@ -2,8 +2,9 @@ import json
 from datetime import timedelta
 
 from django.contrib.auth.models import Permission, User
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
+from apiary.mcp_server import transport_security  # builds the MCP app now, under the test settings
 from apiary.mcp_testing import mcp_client
 
 from apiary.models import APIToken
@@ -163,3 +164,12 @@ class ApiTokenAdminTests(TestCase):
         self.client.force_login(staff)
         self.assertEqual(self.client.get("/admin/apiary/apitoken/").status_code, 403)
         self.assertEqual(self.client.get("/admin/apiary/apitoken/add/").status_code, 403)
+
+
+class TransportSecurityTests(TestCase):
+    @override_settings(ALLOWED_HOSTS=["workspaces.test", ".sites.test"], SITES_DOMAIN="sites.test")
+    def test_site_hosts_do_not_switch_off_dns_rebinding_protection(self):
+        security = transport_security()
+        self.assertTrue(security.enable_dns_rebinding_protection)
+        self.assertEqual(security.allowed_hosts, ["workspaces.test", "workspaces.test:*"])
+

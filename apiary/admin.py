@@ -18,7 +18,7 @@ from unfold.decorators import action
 from unfold.enums import ActionVariant
 from unfold.widgets import UnfoldAdminFileFieldWidget, UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget
 
-from . import pages, projectdata
+from . import projectdata, sites
 from .views import PROJECT_APPS
 from .models import APIToken, DataSnapshot, Project, Site, SiteVersion
 
@@ -192,7 +192,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
         current = projectdata.applied_migrations(obj.project)
         return 'current' if obj.migrations == current else 'older (not restorable)'
 
-    @admin.display(description='Page versions built from it')
+    @admin.display(description='Site versions built from it')
     def used_by(self, obj):
         versions = SiteVersion.objects.filter(data_snapshot=obj).select_related('site')
         return ', '.join(str(v) for v in versions) or '-'
@@ -313,16 +313,18 @@ class SiteForm(forms.ModelForm):
         fields = ['project', 'name', 'title']
         widgets = {'project': UnfoldAdminSelectWidget(choices=[(p, p) for p in PROJECT_APPS])}
 
-    def clean_name(self):
-        name = self.cleaned_data['name']
-        if not pages.SITE_NAME.match(name):
-            raise forms.ValidationError('1-50 lowercase letters, digits and hyphens, starting with a letter or digit.')
-        return name
+    def clean(self):
+        cleaned = super().clean()
+        if self.instance.pk is None:  # the same checks as MCP's create_site
+            try:
+                sites.check_new_site(cleaned.get('project'), cleaned.get('name'))
+            except sites.SiteError as error:
+                raise forms.ValidationError(str(error))
+        return cleaned
 
-    def clean_project(self):
-        if self.cleaned_data['project'] not in PROJECT_APPS:
-            raise forms.ValidationError('Unknown project.')
-        return self.cleaned_data['project']
+    def validate_unique(self):
+        # check_new_site reports a taken name, naming the site that has it.
+        pass
 
 
 class UploadForm(forms.Form):
@@ -346,7 +348,7 @@ class RollbackForm(forms.Form):
 @admin.register(Site)
 class SiteAdmin(SuperuserOnly, ModelAdmin):
     """
-    Static sites on the pages host (apiary.pages). Staff build them over MCP;
+    Static sites, each on its own host (apiary.sites). Staff build them over MCP;
     here superusers can also create one, upload a zip into its draft, publish,
     roll back, unpublish and delete (with its files).
     """
@@ -380,11 +382,11 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def delete_model(self, request, obj):
-        pages.delete_site(obj)
+        sites.delete_site(obj)
 
     def delete_queryset(self, request, queryset):
         for site in queryset:
-            pages.delete_site(site)
+            sites.delete_site(site)
 
     @admin.display(description='Live version')
     def live(self, obj):
@@ -396,13 +398,13 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
 
     @admin.display(description='URL')
     def link(self, obj):
-        url = pages.site_url(obj)
+        url = sites.site_url(obj)
         return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', url, url) if obj.live_version_id else url
 
     @admin.action(description='Unpublish selected sites')
     def unpublish_selected(self, request, queryset):
         for site in queryset:
-            pages.unpublish(site)
+            sites.unpublish(site)
         self.message_user(request, f'Unpublished {queryset.count()} site(s).')
 
     def page(self, request, title, **context):
@@ -415,7 +417,7 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
 
     @action(description='Open site', url_path='open', icon='open_in_new', permissions=['superuser'])
     def open_site(self, request, object_id):
-        return HttpResponseRedirect(pages.site_url(self.get_object(request, object_id)))
+        return HttpResponseRedirect(sites.site_url(self.get_object(request, object_id)))
 
     @action(description='Upload zip', url_path='upload', icon='upload', permissions=['superuser'])
     def upload(self, request, object_id):
@@ -423,8 +425,8 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         form = UploadForm(request.POST or None, request.FILES or None)
         if request.method == 'POST' and form.is_valid():
             try:
-                version = pages.upload_zip(site, form.cleaned_data['archive'], user=request.user)
-            except pages.PagesError as error:
+                version = sites.upload_zip(site, form.cleaned_data['archive'], user=request.user)
+            except sites.SiteError as error:
                 form.add_error('archive', str(error))
             else:
                 self.message_user(request, f'Draft v{version.number} now holds {len(version.files)} files. '
@@ -432,7 +434,7 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
                 return self.back(site)
         return self.page(request, f'Upload files to {site}', form=form, submit_label='Upload to draft',
                          intro=f'Files go into the draft, which is not served until it is published. Allowed: '
-                               f'{", ".join(sorted(pages.CONTENT_TYPES))}; 2 MB a file, 20 MB a site.')
+                               f'{", ".join(sorted(sites.CONTENT_TYPES))}; 2 MB a file, 20 MB a site.')
 
     @action(description='Publish draft', url_path='publish', icon='publish', permissions=['superuser'])
     def publish(self, request, object_id):
@@ -445,11 +447,11 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
                                     f'datasets with a snapshot of {site.project} from the same moment.')
                              if draft else 'There is no draft; publishing starts one from the live version.')
         try:
-            version = pages.publish(site, user=request.user)
-        except pages.PagesError as error:
+            version = sites.publish(site, user=request.user)
+        except sites.SiteError as error:
             self.message_user(request, str(error), messages.ERROR)
         else:
-            self.message_user(request, f'Published v{version.number} at {pages.site_url(site)}', messages.SUCCESS)
+            self.message_user(request, f'Published v{version.number} at {sites.site_url(site)}', messages.SUCCESS)
         return self.back(site)
 
     @action(description='Roll back', url_path='rollback', icon='history', permissions=['superuser'])
@@ -457,7 +459,7 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         site = self.get_object(request, object_id)
         form = RollbackForm(request.POST or None, site=site)
         if request.method == 'POST' and form.is_valid():
-            version = pages.rollback(site, form.cleaned_data['version'])
+            version = sites.rollback(site, form.cleaned_data['version'])
             self.message_user(request, f'v{version.number} is live again.', messages.SUCCESS)
             return self.back(site)
         return self.page(request, f'Roll back {site}', form=form, submit_label='Make it live',
@@ -470,8 +472,8 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         site = self.get_object(request, object_id)
         if request.method != 'POST':
             return self.page(request, f'Unpublish {site}', form=forms.Form(), submit_label='Unpublish',
-                             variant='danger', intro=f'Takes {pages.site_url(site)} offline. Its versions are '
+                             variant='danger', intro=f'Takes {sites.site_url(site)} offline. Its versions are '
                                                      'kept; Roll back makes one live again.')
-        pages.unpublish(site)
+        sites.unpublish(site)
         self.message_user(request, f'{site} is offline; its versions are kept.', messages.SUCCESS)
         return self.back(site)

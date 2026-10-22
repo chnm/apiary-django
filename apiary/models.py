@@ -130,7 +130,7 @@ class DataSnapshot(BaseModel):
         ("manual", "Manual"),
         ("pre-restore", "Before a restore"),
         ("pre-reset", "Before a reset"),
-        ("page", "Page publish"),
+        ("site", "Site publish"),
         ("imported", "Imported"),
     ]
 
@@ -177,11 +177,11 @@ class DataSnapshot(BaseModel):
 
 
 class Site(BaseModel):
-    """A static site on the pages host, at /<project>/<name>/."""
+    """A static site at <name>.SITES_DOMAIN; names are unique across projects."""
     # In the storage path, so a site recreated under an old name starts clean.
     key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     project = models.CharField(max_length=50)
-    name = models.SlugField(max_length=50)
+    name = models.SlugField(max_length=50, unique=True)
     title = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
@@ -190,8 +190,7 @@ class Site(BaseModel):
                                      related_name="+", help_text="The version served; empty when unpublished.")
 
     class Meta:
-        db_table_comment = "Static sites published to the pages host"
-        constraints = [models.UniqueConstraint(fields=["project", "name"], name="site_project_name")]
+        db_table_comment = "Static sites, each served at <name>.SITES_DOMAIN"
 
     def __str__(self):
         return f"{self.project}/{self.name}"
@@ -199,7 +198,7 @@ class Site(BaseModel):
 
 class SiteVersion(BaseModel):
     """
-    One immutable set of a site's files, under pages/<project>/<site key>/v<number>/.
+    One immutable set of a site's files, under sites/<project>/<site key>/v<number>/.
     The newest unpublished version is the draft that tools write into.
     """
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="versions")
@@ -223,5 +222,5 @@ class SiteVersion(BaseModel):
 
     @property
     def prefix(self):
-        return f"pages/{self.site.project}/{self.site.key}/v{self.number}/"
+        return f"sites/{self.site.project}/{self.site.key}/v{self.number}/"
 

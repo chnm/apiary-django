@@ -1,5 +1,6 @@
 """
-Static sites on the pages host (settings.PAGES_HOST), at /<project>/<site>/.
+Static sites, each on its own host: <name>.SITES_DOMAIN (sites.rrchnm.org).
+Names are unique across projects.
 
 Files live in private storage under each version's prefix. Tools write into
 the site's draft version; publishing captures its datasets alongside a data
@@ -9,7 +10,8 @@ the site at an earlier one.
 
 Pages are untrusted HTML, so they are served only on their own host, never
 the app's, and with the ADR 0050 headers for agent-written pages: the CSP
-sandbox gives every page an opaque origin, with no cookies and no storage.
+sandbox gives every page an opaque origin, with no cookies and no storage. A
+host per site also keeps sites apart from each other.
 """
 import hashlib
 import posixpath
@@ -21,11 +23,10 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.db import transaction
-from django.http import FileResponse, Http404, HttpResponse, HttpResponsePermanentRedirect
+from django.http import FileResponse, Http404
 from django.test import RequestFactory
 from django.urls import Resolver404, resolve
 from django.utils import timezone
-from django.utils.html import escape
 
 from apiary import projectdata
 from apiary.views import PROJECT_APPS
@@ -43,22 +44,21 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_SITE_BYTES = 20 * 1024 * 1024
 MAX_FILES = 200
 PATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$")
-SITE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,49}$")
+# A DNS label: letters, digits and inner hyphens.
+SITE_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$")
+# Names a site would plausibly be confused with infrastructure under.
+RESERVED_NAMES = {"www", "api", "admin", "mail", "pages", "sites", "static", "media", "mcp", "app", "apiary"}
 # Scripts and styles may also come from the CDNs the artifacts use, so pages
-# can load D3 and friends; everything else stays on the pages host.
+# can load D3 and friends; everything else stays on the site's own host.
 CDNS = "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com"
 
 
-class PagesError(Exception):
+class SiteError(Exception):
     pass
 
 
-def base_url():
-    return settings.PAGES_BASE_URL.rstrip("/")
-
-
 def site_url(site):
-    return f"{base_url()}/{site.project}/{site.name}/"
+    return settings.SITES_URL.format(name=site.name)
 
 
 def get_site(project, name):
@@ -67,18 +67,29 @@ def get_site(project, name):
     try:
         return Site.objects.get(project=project, name=name)
     except Site.DoesNotExist:
-        raise PagesError(f"No site {name!r} in {project}; create_site makes one.")
+        raise SiteError(f"No site {name!r} in {project}; create_site makes one.")
+
+
+def check_new_site(project, name):
+    """Every way of creating a site (MCP, the admin) goes through these checks."""
+    from apiary.models import Site
+
+    if project not in PROJECT_APPS:
+        raise SiteError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
+    if not SITE_NAME.match(name or ""):
+        raise SiteError("Site names are 1-50 lowercase letters, digits and inner hyphens: "
+                         "they are the first part of the site's host name.")
+    if name in RESERVED_NAMES:
+        raise SiteError(f"{name!r} is reserved; choose another name.")
+    existing = Site.objects.filter(name=name).first()
+    if existing:
+        raise SiteError(f"The name {name!r} is taken (by {existing}): names are unique across projects.")
 
 
 def create_site(project, name, *, title="", user=None):
     from apiary.models import Site
 
-    if project not in PROJECT_APPS:
-        raise PagesError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
-    if not SITE_NAME.match(name):
-        raise PagesError("Site names are 1-50 lowercase letters, digits and hyphens, starting with a letter or digit.")
-    if Site.objects.filter(project=project, name=name).exists():
-        raise PagesError(f"{project} already has a site {name!r}.")
+    check_new_site(project, name)
     return Site.objects.create(project=project, name=name, title=title, created_by=user)
 
 
@@ -90,7 +101,7 @@ def write(name, data):
     saved = storage.save(name, ContentFile(data))
     if saved != name:
         storage.delete(saved)
-        raise PagesError(f"Could not write {name}.")
+        raise SiteError(f"Could not write {name}.")
 
 
 def entry(path, data):
@@ -100,10 +111,10 @@ def entry(path, data):
 
 def check_path(path):
     if not PATH.match(path) or ".." in path.split("/"):
-        raise PagesError(f"Bad path {path!r}: use relative paths of letters, digits, '.', '_', '-' and '/'.")
+        raise SiteError(f"Bad path {path!r}: use relative paths of letters, digits, '.', '_', '-' and '/'.")
     extension = posixpath.splitext(path)[1].lower()
     if extension not in CONTENT_TYPES:
-        raise PagesError(f"{path!r}: file type not allowed; one of {', '.join(sorted(CONTENT_TYPES))}.")
+        raise SiteError(f"{path!r}: file type not allowed; one of {', '.join(sorted(CONTENT_TYPES))}.")
 
 
 @transaction.atomic
@@ -132,12 +143,12 @@ def put_files(site, files, *, user=None):
     for path, data in files.items():
         check_path(path)
         if len(data) > MAX_FILE_BYTES:
-            raise PagesError(f"{path!r} is {len(data)} bytes; the limit is {MAX_FILE_BYTES}.")
+            raise SiteError(f"{path!r} is {len(data)} bytes; the limit is {MAX_FILE_BYTES}.")
     merged = {**version.files, **{path: entry(path, data) for path, data in files.items()}}
     if len(merged) > MAX_FILES:
-        raise PagesError(f"A site holds at most {MAX_FILES} files.")
+        raise SiteError(f"A site holds at most {MAX_FILES} files.")
     if sum(item["size"] for item in merged.values()) > MAX_SITE_BYTES:
-        raise PagesError(f"A site holds at most {MAX_SITE_BYTES} bytes.")
+        raise SiteError(f"A site holds at most {MAX_SITE_BYTES} bytes.")
     for path, data in files.items():
         write(version.prefix + path, data)
     version.files = merged
@@ -149,7 +160,7 @@ def delete_files(site, paths, *, user=None):
     version = draft(site, user=user)
     missing = [path for path in paths if path not in version.files and path not in version.datasets]
     if missing:
-        raise PagesError(f"Not in the draft: {', '.join(missing)}.")
+        raise SiteError(f"Not in the draft: {', '.join(missing)}.")
     for path in paths:
         version.files.pop(path, None)
         version.datasets.pop(path, None)
@@ -167,18 +178,18 @@ def upload_zip(site, source, *, user=None):
     try:
         archive = zipfile.ZipFile(source)
     except zipfile.BadZipFile:
-        raise PagesError("Not a zip file.")
+        raise SiteError("Not a zip file.")
     names = [n for n in archive.namelist()
              if not n.endswith("/") and not n.startswith("__MACOSX/") and posixpath.basename(n) != ".DS_Store"]
     if not names:
-        raise PagesError("The zip holds no files.")
+        raise SiteError("The zip holds no files.")
     roots = {n.split("/", 1)[0] for n in names}
     strip = len(roots) == 1 and all("/" in n for n in names)
     files = {}
     for name in names:
         info = archive.getinfo(name)
         if info.file_size > MAX_FILE_BYTES:
-            raise PagesError(f"{name!r} is {info.file_size} bytes; the limit is {MAX_FILE_BYTES}.")
+            raise SiteError(f"{name!r} is {info.file_size} bytes; the limit is {MAX_FILE_BYTES}.")
         files[name.split("/", 1)[1] if strip else name] = archive.read(info)
     return put_files(site, files, user=user)
 
@@ -199,7 +210,7 @@ def dataset_url(project, dataset, params=None):
     except Resolver404:
         match = None
     if match is None or match.namespace != "datasets":
-        raise PagesError(f"No dataset {dataset!r} in {project}; list_datasets shows them.")
+        raise SiteError(f"No dataset {dataset!r} in {project}; list_datasets shows them.")
     return f"{url}?{urlencode(params)}" if params else url
 
 
@@ -209,7 +220,7 @@ def attach_dataset(site, dataset, *, params=None, path=None, user=None):
     path = path or f"data/{dataset}.json"
     check_path(path)
     if not path.endswith(".json"):
-        raise PagesError("Dataset files are JSON: give the path a .json name.")
+        raise SiteError("Dataset files are JSON: give the path a .json name.")
     version = draft(site, user=user)
     version.datasets[path] = url
     version.files.pop(path, None)
@@ -228,21 +239,21 @@ def read_dataset(url, user):
     match = resolve(request.path)
     response = match.func(request, *match.args, **match.kwargs)
     if response.status_code != 200:
-        raise PagesError(f"{url} answered {response.status_code}: {response.content.decode()[:200]}")
+        raise SiteError(f"{url} answered {response.status_code}: {response.content.decode()[:200]}")
     return response.content
 
 
 def publish(site, *, user):
     version = draft(site, user=user)
     if "index.html" not in version.files:
-        raise PagesError("A site needs an index.html to publish.")
+        raise SiteError("A site needs an index.html to publish.")
     snapshot = None
     if version.datasets:
         def capture(alias):
             return {path: read_dataset(url, user) for path, url in version.datasets.items()}
 
         snapshot, captured = projectdata.take_snapshot(
-            site.project, kind="page", user=user, label=f"{site} v{version.number}", during=capture)
+            site.project, kind="site", user=user, label=f"{site} v{version.number}", during=capture)
         for path, data in captured.items():
             write(version.prefix + path, data)
             version.files[path] = entry(path, data)
@@ -258,7 +269,7 @@ def publish(site, *, user):
 def rollback(site, number):
     version = site.versions.filter(number=number, published_at__isnull=False).first()
     if version is None:
-        raise PagesError(f"{site} has no published version {number}.")
+        raise SiteError(f"{site} has no published version {number}.")
     site.live_version = version
     site.save(update_fields=["live_version"])
     return version
@@ -283,7 +294,7 @@ def describe(site):
     }
 
 
-# Serving, on the pages host only.
+# Serving, on the site hosts only.
 
 def headers(request, response):
     origin = f"{request.scheme}://{request.get_host()}"
@@ -308,27 +319,16 @@ def headers(request, response):
     return response
 
 
-def index(request):
+def serve(request, path=""):
+    """A file of the site named by the request's host."""
     from apiary.models import Site
 
-    items = "".join(
-        f'<li><a href="{escape(site.project)}/{escape(site.name)}/">{escape(site.title or site.name)}</a>'
-        f" ({escape(site.project)})</li>"
-        for site in Site.objects.filter(live_version__isnull=False).order_by("project", "name")
-    )
-    html = f"<!DOCTYPE html><html lang=en><title>Apiary pages</title><h1>Apiary pages</h1><ul>{items}</ul></html>"
-    return headers(request, HttpResponse(html))
-
-
-def serve(request, project, site, path=""):
-    from apiary.models import Site
-
-    found = Site.objects.filter(project=project, name=site).select_related("live_version").first()
-    if found is None or found.live_version is None:
+    site = Site.objects.filter(name=request.site_name).select_related("live_version").first()
+    if site is None or site.live_version is None:
         raise Http404
     if path == "" or path.endswith("/"):
         path += "index.html"
-    version = found.live_version
+    version = site.live_version
     item = version.files.get(path)
     if item is None:
         raise Http404
@@ -336,17 +336,19 @@ def serve(request, project, site, path=""):
     return headers(request, response)
 
 
-def redirect_to_site(request, project, site):
-    return HttpResponsePermanentRedirect(f"/{project}/{site}/")
-
-
-class PagesHostMiddleware:
-    """Route the pages host to the pages URLs, and nothing else."""
+class SiteHostMiddleware:
+    """Route a site's host to the site URLs, and nothing else."""
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if settings.PAGES_HOST and request.get_host().split(":")[0] == settings.PAGES_HOST:
-            request.urlconf = "apiary.pages_urls"
+        host = request.get_host().split(":")[0]
+        suffix = f".{settings.SITES_DOMAIN}"
+        # The bare domain too: ALLOWED_HOSTS' ".domain" admits it, and it must
+        # never reach the app's own URLs.
+        if settings.SITES_DOMAIN and (host == settings.SITES_DOMAIN or host.endswith(suffix)):
+            name = host[:-len(suffix)] if host.endswith(suffix) else ""
+            request.site_name = name if name and "." not in name else None
+            request.urlconf = "apiary.sites_urls"
         return self.get_response(request)
