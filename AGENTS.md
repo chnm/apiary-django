@@ -216,9 +216,15 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   another schema. It verifies the checksum before touching data, snapshots the
   current rows first (so every restore can be undone), then flushes and loads
   in one transaction.
-- Admin > Data Snapshots (superusers): take one, compare a snapshot's rows
-  with the current ones and restore it (typing the project name), download its
-  data, delete it with its files. The schema column shows which are restorable.
+- Admin > Data Snapshots (superusers; each project's sidebar section links its
+  own): take one, compare a snapshot's rows with the current ones and restore
+  it (typing the project name), download its data, delete it with its files.
+  The schema column shows which are restorable.
+- Export / Import move a snapshot between environments as a zip bundle
+  (`manifest.json` + `data.json.gz`, format 1). Import checks the checksum,
+  the project, and that every record belongs to that project; restore checks
+  the records again, so a bundle can never write users or another project.
+  Imported snapshots are never pruned.
 - `snapshot_project`, `restore_project_snapshot`, `reset_project_data` (which
   snapshots first) and `prune_snapshots` also run from `/apiary/mgmt/`.
   Pruning removes only automatic snapshots past retention (newest 10 per
@@ -242,7 +248,10 @@ scripts: the CSP sandbox gives them an opaque origin with no cookies.
   reads every dataset with the publisher's permissions inside one snapshot
   (`DataSnapshot` kind `page`), so a page records exactly the data it shows.
 - Limits: 2 MB a file, 200 files and 20 MB a site, a fixed list of file types.
-- Admin > Sites (superusers) lists sites and versions and unpublishes them.
+- Admin > Pages (superusers; each project's sidebar section links its own):
+  create a site, upload a zip into its draft (put_files' checks; a single
+  top folder is stripped), publish, roll back, unpublish (both confirm on
+  POST), and delete with its files.
 
 ### Model Architecture
 

@@ -131,6 +131,7 @@ class DataSnapshot(BaseModel):
         ("pre-restore", "Before a restore"),
         ("pre-reset", "Before a reset"),
         ("page", "Page publish"),
+        ("imported", "Imported"),
     ]
 
     # In the storage path, so a reused id (a restored or reset database) can
