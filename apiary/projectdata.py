@@ -10,6 +10,7 @@ into tables that no longer match them.
 
 Restoring first snapshots the current data, so every restore can be undone.
 """
+import functools
 import gzip
 import hashlib
 import json
@@ -270,4 +271,25 @@ def import_bundle(source, *, user=None):
         return snapshot
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+# Exploring: a snapshot's records as one table per model, for the admin's
+# browser and SQL console. It reads only the snapshot, never the live schema,
+# so snapshots from older schemas open too. Snapshots never change, so the
+# parsed tables are cached by key.
+
+@functools.lru_cache(maxsize=4)
+def _tables(key, data_path):
+    with storages["default"].open(data_path, "rb") as handle:
+        records = json.loads(gzip.decompress(handle.read()))
+    tables = {}
+    for record in records:
+        table = record["model"].split(".", 1)[1]
+        tables.setdefault(table, []).append({"id": record.get("pk"), **record.get("fields", {})})
+    return {name: sorted(rows, key=lambda row: (row["id"] is None, row["id"])) for name, rows in sorted(tables.items())}
+
+
+def snapshot_tables(snapshot):
+    """{table: [row, ...]}, each row {"id": pk, **fields}, ordered by id. Shared: do not modify."""
+    return _tables(str(snapshot.key), snapshot.data_path)
 

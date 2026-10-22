@@ -1,0 +1,177 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+<div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+    <div class="p-4">
+        <p class="font-semibold">{{ snapshot }}{% if snapshot.label %}: {{ snapshot.label }}{% endif %}</p>
+        <p class="text-sm">Read from the snapshot itself, as it was taken: tables and columns are what it holds, whatever the current schema.</p>
+    </div>
+    <nav class="border-base-200 border-t flex flex-wrap gap-2 p-4 dark:border-base-800" aria-label="Tables">
+        {% for name, count in tables.items %}
+            <a href="?table={{ name|urlencode }}" class="border border-base-200 px-3 py-1 rounded-default dark:border-base-800{% if name == table %} bg-primary-600 text-white{% endif %}">
+                {{ name }} <span class="text-sm">({{ count }})</span>
+            </a>
+        {% empty %}
+            <span>This snapshot holds no rows.</span>
+        {% endfor %}
+    </nav>
+
+    {% if table %}
+    <form method="get" class="border-base-200 border-t flex flex-wrap gap-2 items-center p-4 dark:border-base-800">
+        <input type="hidden" name="table" value="{{ table }}">
+        <input type="search" name="q" value="{{ search }}" placeholder="Search {{ table }}" aria-label="Search"
+               class="border border-base-200 px-3 py-2 rounded-default w-72 dark:border-base-800 dark:bg-base-900">
+        {% component "unfold/components/button.html" with submit=1 variant="default" %}Search{% endcomponent %}
+        {% if search or wanted %}<a href="?table={{ table|urlencode }}" class="text-primary-600">Clear</a>{% endif %}
+        <span class="text-sm">
+            {% if wanted %}Row id {{ wanted }}: {% endif %}{{ matched }} row{{ matched|pluralize }}{% if search or wanted %} match{% endif %}{% if page.paginator.num_pages > 1 %}, page {{ page.number }} of {{ page.paginator.num_pages }}{% endif %}
+        </span>
+    </form>
+
+    <div class="border-base-200 border-t overflow-auto dark:border-base-800">
+        <table class="text-sm w-full">
+            <thead>
+                <tr>{% for column in columns %}<th class="border-b border-base-200 px-3 py-2 text-left dark:border-base-800">{{ column }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                {% for row in body %}
+                    <tr>
+                        {% for value, related in row %}
+                            <td class="border-b border-base-200 px-3 py-1 align-top dark:border-base-800">
+                                {% if related %}<a class="text-primary-600" href="?table={{ related|urlencode }}&amp;id={{ value|urlencode }}">{{ value }}</a>{% else %}{{ value|truncatechars:200 }}{% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% empty %}
+                    <tr><td class="px-3 py-2" colspan="{{ columns|length|default:1 }}">No rows.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page.has_other_pages %}
+    <div class="border-base-200 border-t flex gap-4 p-4 dark:border-base-800">
+        {% if page.has_previous %}<a class="text-primary-600" href="?table={{ table|urlencode }}&amp;q={{ search|urlencode }}&amp;id={{ wanted|urlencode }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+        {% if page.has_next %}<a class="text-primary-600" href="?table={{ table|urlencode }}&amp;q={{ search|urlencode }}&amp;id={{ wanted|urlencode }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+    <div class="p-4">
+        <p class="font-semibold">SQL console</p>
+        <p class="text-sm">
+            DuckDB, running in your browser on this snapshot only: one table per model above, joined on ids
+            (e.g. <code>activity.location = location.id</code>). Nothing runs on the server, and nothing here changes data.
+            Loading it downloads DuckDB (about 10 MB) once.
+        </p>
+    </div>
+    <div class="border-base-200 border-t flex flex-col gap-3 p-4 dark:border-base-800">
+        <div><button type="button" id="duckdb-load" class="font-medium inline-flex items-center gap-1 rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border disabled:opacity-50 disabled:cursor-not-allowed border-base-200 dark:border-base-800">Load SQL console</button></div>
+        <textarea id="duckdb-sql" rows="5" class="border border-base-200 font-mono p-3 rounded-default text-sm w-full dark:border-base-800 dark:bg-base-900" aria-label="SQL" disabled>{% if table %}SELECT * FROM "{{ table }}" LIMIT 20{% endif %}</textarea>
+        <div><button type="button" id="duckdb-run" class="font-medium inline-flex items-center gap-1 rounded-default justify-center whitespace-nowrap cursor-pointer px-3 py-2 border disabled:opacity-50 disabled:cursor-not-allowed bg-primary-600 border-transparent text-white" disabled>Run</button> <span class="text-sm">Ctrl+Enter runs it too.</span></div>
+        <p id="duckdb-status" class="text-sm" role="status"></p>
+        <div class="overflow-auto"><table id="duckdb-result" class="text-sm w-full"></table></div>
+    </div>
+</div>
+</div>
+
+{{ console|json_script:"duckdb-tables" }}
+<script type="module">
+const DUCKDB = "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm";
+const MAX_ROWS = 500;
+const tables = JSON.parse(document.getElementById("duckdb-tables").textContent);
+const $ = (id) => document.getElementById(id);
+const status = (text) => { $("duckdb-status").textContent = text; };
+let conn = null;
+
+// Arrow hands dates and timestamps over as epoch milliseconds, and times of day
+// as a count of the type's unit since midnight.
+const TIME_UNITS = { SECOND: 1, MILLISECOND: 1e3, MICROSECOND: 1e6, NANOSECOND: 1e9 };
+
+function display(value, type) {
+  if (value === null || value === undefined) return "";
+  if (/^(Date|Timestamp)/.test(type)) return new Date(Number(value)).toISOString().slice(0, type.startsWith("Date") ? 10 : 19);
+  if (/^Time(32|64)/.test(type)) {
+    const unit = TIME_UNITS[(type.match(/<(\w+)>/) || [])[1]] || 1e6;
+    return new Date(Number(value) / unit * 1000).toISOString().slice(11, 19);
+  }
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "object") return JSON.stringify(value, (k, v) => typeof v === "bigint" ? v.toString() : v);
+  return String(value);
+}
+
+async function load() {
+  $("duckdb-load").disabled = true;
+  status("Loading DuckDB…");
+  try {
+    const duckdb = await import(DUCKDB);
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+    // The worker script is cross-origin; a same-origin blob that imports it is allowed.
+    const workerUrl = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }));
+    const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(workerUrl));
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(workerUrl);
+    conn = await db.connect();
+    const loaded = [];
+    for (const table of tables) {
+      if (!table.rows) continue;  // DuckDB cannot infer columns from an empty file
+      status(`Loading ${table.name}…`);
+      const response = await fetch(table.url, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`${table.name}: HTTP ${response.status}`);
+      await db.registerFileText(`${table.name}.ndjson`, await response.text());
+      await conn.query(`CREATE TABLE "${table.name}" AS SELECT * FROM read_json_auto('${table.name}.ndjson', format = 'newline_delimited')`);
+      loaded.push(`${table.name} (${table.rows})`);
+    }
+    $("duckdb-sql").disabled = false;
+    $("duckdb-run").disabled = false;
+    status(`Ready. Tables: ${loaded.join(", ") || "none (the snapshot is empty)"}.`);
+  } catch (error) {
+    status(`Could not load the SQL console: ${error.message}`);
+    $("duckdb-load").disabled = false;
+  }
+}
+
+async function run() {
+  const sql = $("duckdb-sql").value.trim();
+  if (!conn || !sql) return;
+  const table = $("duckdb-result");
+  table.replaceChildren();
+  status("Running…");
+  try {
+    const result = await conn.query(sql);
+    const fields = result.schema.fields.map((field) => ({ name: field.name, type: String(field.type) }));
+    const head = table.createTHead().insertRow();
+    for (const field of fields) {
+      const th = document.createElement("th");
+      th.className = "border-b border-base-200 px-3 py-2 text-left";
+      th.textContent = field.name;
+      head.append(th);
+    }
+    const body = table.createTBody();
+    const rows = result.toArray();
+    for (const row of rows.slice(0, MAX_ROWS)) {
+      const values = row.toJSON();
+      const tr = body.insertRow();
+      for (const field of fields) {
+        const td = tr.insertCell();
+        td.className = "border-b border-base-200 px-3 py-1 align-top";
+        td.textContent = display(values[field.name], field.type);
+      }
+    }
+    status(rows.length > MAX_ROWS ? `${rows.length} rows; showing the first ${MAX_ROWS}.` : `${rows.length} row${rows.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    status(`Error: ${error.message}`);
+  }
+}
+
+$("duckdb-load").addEventListener("click", load);
+$("duckdb-run").addEventListener("click", run);
+$("duckdb-sql").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) run();
+});
+</script>
+{% endblock %}
