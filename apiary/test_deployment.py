@@ -30,10 +30,13 @@ class DeploymentTests(SimpleTestCase):
             f'CREATE SCHEMA IF NOT EXISTS "{app}"'
             for app in ("bom", "connthreads", "mappingviolence", "relec")
         ])
-        self.assertEqual([call.kwargs["database"] for call in migrate.call_args_list], [
+        migrations = [call for call in migrate.call_args_list if call.args[0] == "migrate"]
+        self.assertEqual([call.kwargs["database"] for call in migrations], [
             "default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db",
         ])
-        self.assertTrue(all(call.args[0] == "migrate" for call in migrate.call_args_list))
+        # Then the project rows and their groups, from code: never loaddata.
+        self.assertEqual([call.args[0] for call in migrate.call_args_list[len(migrations):]],
+                         ["sync_projects", "init_project_groups"])
 
     def test_workflow_uses_pinned_github_k0s_reusable(self):
         from pathlib import Path

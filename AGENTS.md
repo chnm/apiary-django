@@ -341,7 +341,15 @@ Project metadata stored in `apiary/fixtures/projects.yaml`:
 
 User fixtures stored in `apiary/fixtures/users.yaml` for development.
 
-Load with: `uv run manage.py loaddata apiary/fixtures/projects.yaml`
+Load with: `uv run manage.py loaddata apiary/fixtures/projects.yaml` (Compose,
+on a fresh database only: it writes by primary key).
+
+Deployments never load it. `migrate_projects` (the k8s migrate Job) runs
+`sync_projects`, which gives every app in `PROJECT_APPS` a Project row named
+after the app and never changes an existing one, then `init_project_groups`.
+That command resets each `<project>-viewer/editor/admin` group to its role's
+permissions on every deploy, so new models are covered and hand edits to those
+groups do not last; give extra access with other groups.
 
 ### Templates
 
