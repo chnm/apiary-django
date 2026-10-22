@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib.auth.models import Permission, User
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
-from starlette.testclient import TestClient
+from apiary.mcp_testing import mcp_client
 
 from apiary.models import APIToken
 from bom.models import MortalityBill
@@ -28,13 +28,7 @@ class McpServerTests(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        from apiary.mcp_server import app
-
-        # The SDK's session manager starts once per process: one client for all
-        # tests. Not self.client, which Django replaces with its own before each test.
-        cls.mcp_client = TestClient(app, base_url="http://localhost")
-        cls.mcp_client.__enter__()
-        cls.addClassCleanup(cls.mcp_client.__exit__, None, None, None)
+        cls.mcp_client = mcp_client()
 
     def setUp(self):
         self.user = User.objects.create_user("reader")
@@ -75,9 +69,13 @@ class McpServerTests(TransactionTestCase):
         User.objects.filter(pk=self.user.pk).update(is_active=False)
         self.assertEqual(self.rpc("tools/list", secret=other).status_code, 401)
 
-    def test_records_use_and_offers_only_read_tools(self):
+    def test_records_use_and_offers_read_and_site_tools(self):
         tools = {tool["name"] for tool in self.rpc("tools/list").json()["result"]["tools"]}
-        self.assertEqual(tools, {"list_projects", "query_records", "get_record", "aggregate"})
+        self.assertEqual(tools, {
+            "list_projects", "query_records", "get_record", "aggregate", "list_datasets", "list_sites",
+            "create_site", "put_files", "delete_files", "attach_dataset", "publish_site", "rollback_site",
+            "unpublish_site",
+        })
         self.token.refresh_from_db()
         self.assertIsNotNone(self.token.last_used_at)
 
@@ -93,7 +91,8 @@ class McpServerTests(TransactionTestCase):
         self.assertEqual(page["count"], 1)
         self.assertEqual(page["results"][0]["type"], "Fever")
 
-        error, record = self.call("get_record", project="bom", model="mortalitybill", id=1)
+        first = MortalityBill.objects.order_by("pk").first().pk  # ids are not reset between transactional tests
+        error, record = self.call("get_record", project="bom", model="mortalitybill", id=first)
         self.assertEqual(record["year"], 1665)
 
         error, rows = self.call("aggregate", project="bom", model="mortalitybill",

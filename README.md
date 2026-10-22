@@ -8,7 +8,8 @@ Development: `uv sync`, then `docker --context rootless compose up`.
 The Compose stack loads development fixtures; do not use it for data migration.
 
 AI agents read project data over MCP at `/mcp` (port 8001 in Compose) with an
-API token from the admin; see `AGENTS.md`.
+API token from the admin, and staff publish static sites to
+`pages.apiary.rrchnm.org`; see `AGENTS.md`.
 
 Source remains at `github.com/chnm/apiary-django`. The `deploy/forgejo-k0s`
 branch prepares GitHub Actions → Zot → Argo CD (`k8s/`), with Gunicorn,

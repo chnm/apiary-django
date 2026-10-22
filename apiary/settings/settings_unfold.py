@@ -254,6 +254,18 @@ UNFOLD = {
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
+                        "title": "Data Snapshots",
+                        "icon": "backup",
+                        "link": lambda request: "/admin/apiary/datasnapshot/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": "Sites",
+                        "icon": "web",
+                        "link": lambda request: "/admin/apiary/site/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
                         "title": "API Tokens",
                         "icon": "key",
                         "link": lambda request: "/admin/apiary/apitoken/",

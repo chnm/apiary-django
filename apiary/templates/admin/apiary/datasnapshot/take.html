@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+    <p class="p-4">
+        Saves a copy of one project's data to object storage, read from a single moment.
+        It can be restored later from its page here.
+    </p>
+    <form method="post" class="border-base-200 border-t flex flex-col gap-4 p-4 dark:border-base-800">
+        {% csrf_token %}
+        {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block font-semibold mb-2">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="mt-1 text-sm">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="mt-1 text-red-600">{{ error }}</p>{% endfor %}
+            </div>
+        {% endfor %}
+        <div>
+            {% component "unfold/components/button.html" with submit=1 variant="primary" %}Take snapshot{% endcomponent %}
+        </div>
+    </form>
+</div>
+{% endblock %}

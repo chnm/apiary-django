@@ -7,6 +7,7 @@ resources:
 - app-deploy.yaml
 - sqlite.yaml
 - mcp-route.yaml
+- pages-route.yaml
 - netpol.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
@@ -23,6 +24,7 @@ configMapGenerator:
 - literals:
   - BOM_DB_PATH=/data/bom.sqlite3
   - PINKERTONS_DB_PATH=/data/pinkertons.sqlite3
+  - PAGES_HOST=pages.apiary.rrchnm.org
   - OBJ_STORAGE=True
   - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
   - OBJ_STORAGE_REGION=rrchnm
@@ -270,6 +272,11 @@ replacements:
     select:
       kind: HTTPRoute
       name: mcp
+  - fieldPaths:
+    - spec.parentRefs
+    select:
+      kind: HTTPRoute
+      name: pages
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with

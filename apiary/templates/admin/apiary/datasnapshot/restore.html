@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+    <div class="p-4">
+        <p class="font-semibold">{{ snapshot }}{% if snapshot.label %}: {{ snapshot.label }}{% endif %}</p>
+        <p>Taken {{ snapshot.created_at }}{% if snapshot.created_by %} by {{ snapshot.created_by }}{% endif %}</p>
+        {% if used_by != "-" %}<p>Page versions built from it: {{ used_by }}</p>{% endif %}
+    </div>
+
+    <div class="border-base-200 border-t p-4 dark:border-base-800">
+        <table class="w-full max-w-2xl">
+            <thead><tr><th class="text-left">Table</th><th class="text-right">Snapshot rows</th><th class="text-right">Rows now</th></tr></thead>
+            <tbody>
+                {% for table, then, now in rows %}
+                    <tr><td><code>{{ table }}</code></td><td class="text-right">{{ then }}</td><td class="text-right">{{ now }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if compatible %}
+        <form method="post" class="border-base-200 border-t flex flex-col gap-4 p-4 dark:border-base-800">
+            {% csrf_token %}
+            <p>
+                Replaces every row in <strong>{{ snapshot.project }}</strong> with the snapshot's, in one transaction.
+                The current rows are snapshotted first, so this can be undone the same way.
+            </p>
+            <div>
+                <label for="{{ form.confirm.id_for_label }}" class="block font-semibold mb-2">Confirm</label>
+                {{ form.confirm }}
+                <p class="mt-1 text-sm">{{ form.confirm.help_text }}</p>
+                {% for error in form.confirm.errors %}<p class="mt-1 text-red-600">{{ error }}</p>{% endfor %}
+            </div>
+            <div>
+                {% component "unfold/components/button.html" with submit=1 variant="danger" %}Restore {{ snapshot.project }}{% endcomponent %}
+            </div>
+        </form>
+    {% else %}
+        <div class="border-base-200 border-t p-4 dark:border-base-800">
+            <p class="font-semibold text-red-600">Not restorable: it was taken against another schema of {{ snapshot.project }}.</p>
+            <p class="text-sm">Then: {{ snapshot.migrations|join:", " }}<br>Now: {{ applied|join:", " }}</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

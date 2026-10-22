@@ -186,8 +186,8 @@ CRUD automatically; never name a model `datasets`.
 
 ### MCP for AI agents
 
-`/mcp` is a read-only MCP server (`apiary/mcp_server.py`) on the official MCP
-SDK. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
+`/mcp` is an MCP server (`apiary/mcp_server.py`) on the official MCP SDK:
+read tools for any token, site tools for staff. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
 WSGI: a second container in the k8s app pod (it reads the node-local SQLite
 files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 
@@ -195,12 +195,54 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
   that superusers create and revoke in the admin (API Tokens). Only its SHA-256
   digest is stored; the token is shown once. Every token can read every
   project for now.
-- Tools: `list_projects`, `query_records`, `get_record`, `aggregate`. Field
-  paths are checked against the model's own project, so filters cannot reach
-  auth tables or another project.
+- Read tools: `list_projects`, `query_records`, `get_record`, `aggregate`,
+  `list_datasets`, `list_sites`. Field paths are checked against the model's
+  own project, so filters cannot reach auth tables or another project.
+- Site tools (staff only, see Pages): `create_site`, `put_files`,
+  `delete_files`, `attach_dataset`, `publish_site`, `rollback_site`,
+  `unpublish_site`. Errors are `ToolError`s, so the agent sees why.
 - ORM calls run on asgiref's single sync thread and close their connections:
   outside Django's request cycle nothing else would.
 - The SDK's DNS-rebinding check uses `ALLOWED_HOSTS`.
+
+### Data snapshots
+
+`apiary/projectdata.py` snapshots and restores one project's rows, on SQLite
+or PostgreSQL alike: a gzipped Django fixture plus `manifest.json` in private
+storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
+
+- Read from one consistent moment (`REPEATABLE READ READ ONLY` on PostgreSQL).
+- Records the project's applied migrations; a restore refuses a snapshot from
+  another schema. It verifies the checksum before touching data, snapshots the
+  current rows first (so every restore can be undone), then flushes and loads
+  in one transaction.
+- Admin > Data Snapshots (superusers): take one, compare a snapshot's rows
+  with the current ones and restore it (typing the project name), download its
+  data, delete it with its files. The schema column shows which are restorable.
+- `snapshot_project`, `restore_project_snapshot`, `reset_project_data` (which
+  snapshots first) and `prune_snapshots` also run from `/apiary/mgmt/`.
+  Pruning removes only automatic snapshots past retention (newest 10 per
+  project and the last 30 days kept), never manual ones or those a site
+  version was built from. Future live schema changes should snapshot through
+  this.
+
+### Pages
+
+Static sites (`apiary/pages.py`) are served on `PAGES_HOST`
+(`pages.apiary.rrchnm.org`; `pages.localhost:8000` in Compose) at
+`/<project>/<site>/`, never on the app's host: `PagesHostMiddleware` gives that
+host its own URLconf (`apiary/pages_urls.py`). Pages are untrusted HTML, so
+they get the ADR 0050 headers for agent-written pages plus jsDelivr/cdnjs for
+scripts: the CSP sandbox gives them an opaque origin with no cookies.
+
+- Files live in private storage under `pages/<project>/<site key>/v<n>/`.
+  Tools write into the draft version; published versions never change, and
+  rolling back points the site at an earlier one.
+- `attach_dataset` freezes a Ninja dataset into the site as JSON. Publishing
+  reads every dataset with the publisher's permissions inside one snapshot
+  (`DataSnapshot` kind `page`), so a page records exactly the data it shows.
+- Limits: 2 MB a file, 200 files and 20 MB a site, a fixed list of file types.
+- Admin > Sites (superusers) lists sites and versions and unpublishes them.
 
 ### Model Architecture
 
