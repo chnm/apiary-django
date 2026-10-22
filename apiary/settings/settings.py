@@ -34,10 +34,6 @@ SITES_DOMAIN = env("SITES_DOMAIN", default="")
 SITES_URL = env("SITES_URL", default="https://{name}.%s/" % SITES_DOMAIN)
 if SITES_DOMAIN:
     ALLOWED_HOSTS = [*ALLOWED_HOSTS, f".{SITES_DOMAIN}"]
-# The former shared host, kept so its /<project>/<site>/ links redirect.
-PAGES_HOST = env("PAGES_HOST", default="")
-if PAGES_HOST:
-    ALLOWED_HOSTS = [*ALLOWED_HOSTS, PAGES_HOST]
 
 # Application definition
 

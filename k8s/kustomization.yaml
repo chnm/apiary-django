@@ -7,7 +7,6 @@ resources:
 - app-deploy.yaml
 - sqlite.yaml
 - mcp-route.yaml
-- pages-route.yaml
 - sites-route.yaml
 - netpol.yaml
 
@@ -25,7 +24,6 @@ configMapGenerator:
 - literals:
   - BOM_DB_PATH=/data/bom.sqlite3
   - PINKERTONS_DB_PATH=/data/pinkertons.sqlite3
-  - PAGES_HOST=pages.apiary.rrchnm.org
   - SITES_DOMAIN=sites.rrchnm.org
   - OBJ_STORAGE=True
   - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
@@ -282,11 +280,6 @@ replacements:
     select:
       kind: HTTPRoute
       name: mcp
-  - fieldPaths:
-    - spec.parentRefs
-    select:
-      kind: HTTPRoute
-      name: pages
   - fieldPaths:
     - spec.parentRefs
     select:

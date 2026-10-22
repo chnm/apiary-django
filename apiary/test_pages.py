@@ -9,8 +9,8 @@ from apiary import pages
 from apiary.models import APIToken, DataSnapshot, Site
 from bom.models import MortalityBill
 
-PAGES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/", "PAGES_HOST": "pages.test",
-         "ALLOWED_HOSTS": ["testserver", ".sites.test", "pages.test", "localhost"]}
+PAGES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/",
+         "ALLOWED_HOSTS": ["testserver", ".sites.test", "localhost"]}
 
 
 @override_settings(**PAGES)
@@ -51,11 +51,6 @@ class PagesTests(TestCase):
         MortalityBill.objects.create(year=1666, type="Plague", count=5)
         self.assertEqual(len(json.loads(self.body(self.get("/data/deaths-by-year.json")))), 1)
 
-        # The former shared host redirects to the site's own host and lists it.
-        old = self.get("/bom/plague/data/deaths-by-year.json", host="pages.test")
-        self.assertEqual((old.status_code, old["Location"]), (301, "https://plague.sites.test/data/deaths-by-year.json"))
-        self.assertEqual(self.get("/bom/plague", host="pages.test")["Location"], "https://plague.sites.test/")
-        self.assertIn(b'href="https://plague.sites.test/"', self.get("/", host="pages.test").content)
 
     def test_versions_and_rollback(self):
         pages.put_files(self.site, {"index.html": b"one"}, user=self.staff)
@@ -90,7 +85,7 @@ class PagesTests(TestCase):
         pages.publish(other, user=self.staff)
 
         self.assertEqual(self.body(self.get("/", host="families.sites.test")), b"families")
-        for host in ("plague.sites.test", "sites.test", "a.b.sites.test", "nope.sites.test", "pages.test"):
+        for host in ("plague.sites.test", "sites.test", "a.b.sites.test", "nope.sites.test"):
             self.assertEqual(self.get("/admin/login/", host=host).status_code, 404, host)
         for host in ("sites.test", "a.b.sites.test", "nope.sites.test"):
             self.assertEqual(self.get("/", host=host).status_code, 404, host)

@@ -399,8 +399,7 @@ def transport_security():
     """
     # The site hosts never serve /mcp: leave them out, or their wildcard would
     # switch the check off.
-    site_hosts = {f".{settings.SITES_DOMAIN}", settings.PAGES_HOST} - {"."}
-    hosts = [host for host in settings.ALLOWED_HOSTS if host not in site_hosts]
+    hosts = [host for host in settings.ALLOWED_HOSTS if host != f".{settings.SITES_DOMAIN}"]
     if not hosts or any(host == "*" or host.startswith(".") for host in hosts):
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(

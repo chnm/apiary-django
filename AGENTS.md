@@ -239,9 +239,7 @@ Static sites (`apiary/pages.py`) are each served on their own host,
 in Compose), never the app's: `PagesHostMiddleware` gives those hosts their own
 URLconf (`apiary/sites_urls.py`), so neither the app nor another site shares
 their origin. Site names are therefore unique across projects, DNS labels, and
-not reserved (`check_new_site`, used by MCP and the admin alike). The former
-shared host `PAGES_HOST` (`pages.apiary.rrchnm.org`) lists the sites and
-redirects `/<project>/<site>/...` to them (`apiary/pages_urls.py`). Pages are
+not reserved (`check_new_site`, used by MCP and the admin alike). Pages are
 untrusted HTML, so they get the ADR 0050 headers for agent-written pages plus
 jsDelivr/cdnjs for scripts: the CSP sandbox gives them an opaque origin with no
 cookies.

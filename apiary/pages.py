@@ -1,7 +1,6 @@
 """
 Static sites, each on its own host: <name>.SITES_DOMAIN (sites.rrchnm.org).
-Names are unique across projects; the former shared host (PAGES_HOST,
-/<project>/<site>/) redirects to them.
+Names are unique across projects.
 
 Files live in private storage under each version's prefix. Tools write into
 the site's draft version; publishing captures its datasets alongside a data
@@ -24,11 +23,10 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.db import transaction
-from django.http import FileResponse, Http404, HttpResponse, HttpResponsePermanentRedirect
+from django.http import FileResponse, Http404
 from django.test import RequestFactory
 from django.urls import Resolver404, resolve
 from django.utils import timezone
-from django.utils.html import escape
 
 from apiary import projectdata
 from apiary.views import PROJECT_APPS
@@ -321,18 +319,6 @@ def headers(request, response):
     return response
 
 
-def index(request):
-    """The former shared host's front page: links to every live site."""
-    from apiary.models import Site
-
-    items = "".join(
-        f'<li><a href="{escape(site_url(site))}">{escape(site.title or site.name)}</a> ({escape(site.project)})</li>'
-        for site in Site.objects.filter(live_version__isnull=False).order_by("project", "name")
-    )
-    html = f"<!DOCTYPE html><html lang=en><title>Apiary sites</title><h1>Apiary sites</h1><ul>{items}</ul></html>"
-    return headers(request, HttpResponse(html))
-
-
 def serve(request, path=""):
     """A file of the site named by the request's host."""
     from apiary.models import Site
@@ -350,21 +336,8 @@ def serve(request, path=""):
     return headers(request, response)
 
 
-def redirect_old_url(request, project, site, path=""):
-    """/<project>/<site>/<path> on the former shared host moves to the site's own host."""
-    from apiary.models import Site
-
-    found = Site.objects.filter(project=project, name=site).first()
-    if found is None:
-        raise Http404
-    return HttpResponsePermanentRedirect(site_url(found) + path)
-
-
 class PagesHostMiddleware:
-    """
-    Route a site's host to the site URLs and the former shared host to its
-    redirects; nothing else is reachable on either.
-    """
+    """Route a site's host to the site URLs, and nothing else."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -378,6 +351,4 @@ class PagesHostMiddleware:
             name = host[:-len(suffix)] if host.endswith(suffix) else ""
             request.site_name = name if name and "." not in name else None
             request.urlconf = "apiary.sites_urls"
-        elif settings.PAGES_HOST and host == settings.PAGES_HOST:
-            request.urlconf = "apiary.pages_urls"
         return self.get_response(request)

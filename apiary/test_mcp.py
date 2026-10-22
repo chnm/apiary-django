@@ -167,8 +167,7 @@ class ApiTokenAdminTests(TestCase):
 
 
 class TransportSecurityTests(TestCase):
-    @override_settings(ALLOWED_HOSTS=["workspaces.test", ".sites.test", "pages.test"],
-                       SITES_DOMAIN="sites.test", PAGES_HOST="pages.test")
+    @override_settings(ALLOWED_HOSTS=["workspaces.test", ".sites.test"], SITES_DOMAIN="sites.test")
     def test_site_hosts_do_not_switch_off_dns_rebinding_protection(self):
         security = transport_security()
         self.assertTrue(security.enable_dns_rebinding_protection)
