@@ -3,12 +3,10 @@
 
 {% block content %}
 <div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
-    <p class="p-4">
-        Saves a copy of one project's data to object storage, read from a single moment.
-        It can be restored later from its page here.
-    </p>
-    <form method="post" class="border-base-200 border-t flex flex-col gap-4 p-4 dark:border-base-800">
+    {% if intro %}<p class="p-4">{{ intro }}</p>{% endif %}
+    <form method="post"{% if form.is_multipart %} enctype="multipart/form-data"{% endif %} class="{% if intro %}border-base-200 border-t {% endif %}flex flex-col gap-4 p-4 dark:border-base-800">
         {% csrf_token %}
+        {% for error in form.non_field_errors %}<p class="text-red-600">{{ error }}</p>{% endfor %}
         {% for field in form %}
             <div>
                 <label for="{{ field.id_for_label }}" class="block font-semibold mb-2">{{ field.label }}</label>
@@ -18,7 +16,7 @@
             </div>
         {% endfor %}
         <div>
-            {% component "unfold/components/button.html" with submit=1 variant="primary" %}Take snapshot{% endcomponent %}
+            {% component "unfold/components/button.html" with submit=1 variant=variant|default:"primary" %}{{ submit_label }}{% endcomponent %}
         </div>
     </form>
 </div>

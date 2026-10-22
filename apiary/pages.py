@@ -14,6 +14,7 @@ sandbox gives every page an opaque origin, with no cookies and no storage.
 import hashlib
 import posixpath
 import re
+import zipfile
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -156,6 +157,40 @@ def delete_files(site, paths, *, user=None):
     version.save(update_fields=["files", "datasets"])
     return version
 
+
+
+def upload_zip(site, source, *, user=None):
+    """
+    Add a zip's files to the draft, with put_files' checks. A single top-level
+    folder (as zipping a folder makes) is stripped; OS metadata is skipped.
+    """
+    try:
+        archive = zipfile.ZipFile(source)
+    except zipfile.BadZipFile:
+        raise PagesError("Not a zip file.")
+    names = [n for n in archive.namelist()
+             if not n.endswith("/") and not n.startswith("__MACOSX/") and posixpath.basename(n) != ".DS_Store"]
+    if not names:
+        raise PagesError("The zip holds no files.")
+    roots = {n.split("/", 1)[0] for n in names}
+    strip = len(roots) == 1 and all("/" in n for n in names)
+    files = {}
+    for name in names:
+        info = archive.getinfo(name)
+        if info.file_size > MAX_FILE_BYTES:
+            raise PagesError(f"{name!r} is {info.file_size} bytes; the limit is {MAX_FILE_BYTES}.")
+        files[name.split("/", 1)[1] if strip else name] = archive.read(info)
+    return put_files(site, files, user=user)
+
+
+def delete_site(site):
+    """Delete the site, its versions and all their files."""
+    storage = storages["default"]
+    for version in site.versions.all():
+        for path in version.files:
+            if storage.exists(version.prefix + path):
+                storage.delete(version.prefix + path)
+    site.delete()
 
 def dataset_url(project, dataset, params=None):
     url = f"/api/{project}/v1/datasets/{dataset}/"
