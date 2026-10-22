@@ -167,3 +167,55 @@ class SnapshotBundleTests(TestCase):
         with self.assertRaisesMessage(projectdata.SnapshotError, "records outside bom"):
             projectdata.restore_snapshot(self.snapshot)
         self.assertEqual(MortalityBill.objects.count(), 2)
+
+
+@override_settings(**SITES_SETTINGS)
+class DeleteSiteSnapshotsTests(TestCase):
+    databases = "__all__"
+
+    def setUp(self):
+        self.root = User.objects.create_superuser("root", password="x")
+        self.client.force_login(self.root)
+        MortalityBill.objects.create(year=1665, type="Plague", count=10)
+
+    def published_twice(self, name):
+        from apiary import sites
+
+        site = sites.create_site("bom", name, user=self.root)
+        sites.put_files(site, {"index.html": b"x"}, user=self.root)
+        sites.attach_dataset(site, "deaths-by-year", user=self.root)
+        sites.publish(site, user=self.root)
+        sites.publish(site, user=self.root)
+        return site
+
+    def test_delete_takes_the_publish_snapshots_and_lists_them_first(self):
+        site = self.published_twice("plague")
+        taken = list(DataSnapshot.objects.filter(kind="site"))
+        self.assertEqual(len(taken), 2)
+        manual, _ = projectdata.take_snapshot("bom", kind="manual")
+
+        confirm = self.client.get(f"{SITES}{site.pk}/delete/").content.decode()
+        for snapshot in taken:
+            self.assertIn(f"taken to publish it, with its files): {snapshot}", confirm)
+
+        self.client.post(f"{SITES}{site.pk}/delete/", {"post": "yes"})
+        self.assertFalse(Site.objects.exists())
+        self.assertEqual(list(DataSnapshot.objects.values_list("pk", flat=True)), [manual.pk])
+        storage = storages["default"]
+        for snapshot in taken:
+            self.assertFalse(storage.exists(snapshot.data_path))
+            self.assertFalse(storage.exists(snapshot.manifest_path))
+
+    def test_keeps_a_publish_snapshot_another_site_uses(self):
+        from apiary import sites
+        from apiary.models import SiteVersion
+
+        site = self.published_twice("plague")
+        shared = DataSnapshot.objects.filter(kind="site").first()
+        other = sites.create_site("bom", "other", user=self.root)
+        SiteVersion.objects.create(site=other, number=1, data_snapshot=shared)
+
+        unshared = str(DataSnapshot.objects.exclude(pk=shared.pk).get())
+        self.assertEqual(sites.delete_site(site), [unshared])
+        self.assertEqual(list(DataSnapshot.objects.values_list("pk", flat=True)), [shared.pk])
+        self.assertTrue(storages["default"].exists(shared.data_path))

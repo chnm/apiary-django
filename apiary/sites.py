@@ -194,14 +194,34 @@ def upload_zip(site, source, *, user=None):
     return put_files(site, files, user=user)
 
 
+def publish_snapshots(site):
+    """
+    The snapshots taken to publish this site (kind "site") that no other
+    site's version also uses: they go when the site does.
+    """
+    from apiary.models import DataSnapshot, SiteVersion
+
+    taken = site.versions.exclude(data_snapshot=None).values_list("data_snapshot", flat=True)
+    shared = SiteVersion.objects.exclude(site=site).filter(data_snapshot__in=taken).values_list("data_snapshot", flat=True)
+    return list(DataSnapshot.objects.filter(pk__in=taken, kind="site").exclude(pk__in=shared))
+
+
 def delete_site(site):
-    """Delete the site, its versions and all their files."""
+    """
+    Delete the site, its versions and all their files, and the snapshots taken
+    to publish it. Returns those snapshots' descriptions.
+    """
+    snapshots = publish_snapshots(site)
     storage = storages["default"]
     for version in site.versions.all():
         for path in version.files:
             if storage.exists(version.prefix + path):
                 storage.delete(version.prefix + path)
     site.delete()
+    deleted = [str(snapshot) for snapshot in snapshots]
+    for snapshot in snapshots:
+        projectdata.delete_snapshot(snapshot)
+    return deleted
 
 def dataset_url(project, dataset, params=None):
     url = f"/api/{project}/v1/datasets/{dataset}/"

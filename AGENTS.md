@@ -276,7 +276,8 @@ cookies.
 - Admin > Sites (superusers; each project's sidebar section links its own):
   create a site, upload a zip into its draft (put_files' checks; a single
   top folder is stripped), publish, roll back, unpublish (both confirm on
-  POST), and delete with its files.
+  POST), and delete with its files and the snapshots taken to publish it
+  (kind `site`, unless another site's version uses one).
 
 ### Model Architecture
 

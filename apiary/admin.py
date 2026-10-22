@@ -381,6 +381,16 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    def get_deleted_objects(self, objs, request):
+        # List the publish snapshots too, so the confirmation shows all that goes.
+        deleted, counts, perms_needed, protected = super().get_deleted_objects(objs, request)
+        snapshots = [snapshot for site in objs for snapshot in sites.publish_snapshots(site)]
+        if snapshots:
+            deleted.append([f"Data snapshot (taken to publish it, with its files): {snapshot}"
+                            for snapshot in snapshots])
+            counts[DataSnapshot._meta.verbose_name_plural] = len(snapshots)
+        return deleted, counts, perms_needed, protected
+
     def delete_model(self, request, obj):
         sites.delete_site(obj)
 
