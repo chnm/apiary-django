@@ -4,7 +4,10 @@ from django.db import connections
 
 
 class Command(BaseCommand):
-    help = "Create PostgreSQL project schemas and migrate all project databases."
+    help = (
+        "Create PostgreSQL project schemas, migrate all project databases, then make sure every "
+        "project has its Project row and role groups (no fixtures: a rebuild from scratch gets them)."
+    )
 
     def handle(self, *args, **options):
         # Restore targets may already have a data directory, so initdb is not enough.
@@ -14,3 +17,5 @@ class Command(BaseCommand):
         call_command("migrate", database="default", interactive=False)
         for app in ("bom", "connthreads", "mappingviolence", "relec", "pinkertons"):
             call_command("migrate", app, database=f"{app}_db", interactive=False)
+        call_command("sync_projects")
+        call_command("init_project_groups")
