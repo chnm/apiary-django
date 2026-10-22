@@ -219,6 +219,18 @@ UNFOLD = {
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
+                        "title": "MCP Connections",
+                        "icon": "link",
+                        "link": "/admin/apiary/oauthtoken/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": "OAuth Clients",
+                        "icon": "apps",
+                        "link": "/admin/apiary/oauthclient/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
                         "title": "User Sessions",
                         "icon": "vpn_key",
                         "link": "/admin/sessions/session/",

@@ -26,7 +26,7 @@ from unfold.widgets import UnfoldAdminFileFieldWidget, UnfoldAdminSelectWidget, 
 
 from . import projectdata, sites
 from .views import PROJECT_APPS
-from .models import APIToken, DataSnapshot, Project, Site, SiteVersion
+from .models import APIToken, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
 
 
 admin.site.unregister(User)
@@ -136,6 +136,33 @@ class SuperuserOnly:
 
     def has_delete_permission(self, request, obj=None):
         return self.has_module_permission(request)
+
+
+@admin.register(OAuthToken)
+class OAuthTokenAdmin(SuperuserOnly, ModelAdmin):
+    """MCP clients connected over OAuth (apiary.mcp_oauth). Deleting one ends it at once."""
+    list_display = ['client', 'user', 'created_at', 'last_used_at', 'refresh_expires_at']
+    list_filter = ['user']
+    search_fields = ['client__name', 'user__username']
+    fields = ['client', 'user', 'scopes', 'created_at', 'last_used_at', 'access_expires_at', 'refresh_expires_at']
+    readonly_fields = fields
+
+
+@admin.register(OAuthClient)
+class OAuthClientAdmin(SuperuserOnly, ModelAdmin):
+    """
+    MCP clients that registered themselves. Registering grants nothing, and
+    ones nobody connected are dropped after a day; deleting one also ends its
+    connections.
+    """
+    list_display = ['__str__', 'client_id', 'redirect_uris', 'created_at']
+    search_fields = ['name', 'client_id']
+    fields = ['name', 'client_id', 'redirect_uris', 'created_at']
+    readonly_fields = fields
+
+    @admin.display(description='Redirect URIs')
+    def redirect_uris(self, obj):
+        return ', '.join(obj.info.get('redirect_uris') or [])
 
 
 class TakeSnapshotForm(forms.Form):

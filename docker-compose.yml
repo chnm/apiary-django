@@ -65,8 +65,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-  # Read-only MCP server for AI agents (apiary/mcp_server.py), at
-  # http://localhost:8001/mcp with an API token from the admin.
+  # MCP server for AI agents (apiary/mcp_server.py) at http://localhost:8001/mcp,
+  # with an API token from the admin or over OAuth: the client registers here
+  # and you approve it on the consent page at http://localhost:8000.
   mcp:
     image: "rrchnm/apiary-django"
     ports:
