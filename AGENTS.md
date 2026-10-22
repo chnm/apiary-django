@@ -232,6 +232,26 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   version was built from. Future live schema changes should snapshot through
   this.
 
+### Backups
+
+A full teardown keeps only the remote restic repositories, so they hold
+everything. The nightly `postgres-backup` CronJob (k0s, 02:45 ET; patched in
+`k8s/kustomization.yaml`) fills `/dump`, which restic backs up whole:
+
+- PostgreSQL: `pg_dump` of every project schema, users, tokens, and the site
+  and snapshot index.
+- SQLite: online-backup copies of `bom.sqlite3` and `pinkertons.sqlite3`,
+  integrity-checked.
+- Object storage: the whole bucket (`python -m apiary.bucket dump`), with a
+  manifest of every key and size. That covers site files, snapshot files and
+  uploaded media.
+
+`k8s/restore.yaml` (parked, applied by hand) rehearses a restore: it checks the
+dump's schemas, the SQLite copies and the bucket copy against its manifest
+(`apiary.bucket check`), and lists the steps for a real recovery, including
+`apiary.bucket restore`. The backup and restore pods share the app's
+object-storage egress (`k8s/netpol.yaml`).
+
 ### Sites
 
 A *site* is a static website (`Site`, `SiteVersion`); a *page* is one HTML

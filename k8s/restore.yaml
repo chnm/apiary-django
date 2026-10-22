@@ -3,9 +3,10 @@
 # prunes it. Apply it by hand.
 #
 # As written it is a NON-DESTRUCTIVE REHEARSAL: it restores the newest snapshot
-# into this pod's scratch space, lists the Postgres dump's schemas, and runs
-# SQLite's integrity_check on the SQLite copies. That proves the key, the repo,
-# and readable artifacts without touching the live database or volume.
+# into this pod's scratch space, lists the Postgres dump's schemas, runs
+# SQLite's integrity_check on the SQLite copies, and checks the object-storage
+# copy against its manifest. That proves the key, the repo, and readable
+# artifacts without touching the live database, volume or bucket.
 #
 # The generic rehearsal is rrchnm-systems/k8s-django jobs/restore.yaml; this one
 # also checks the SQLite copies (BOM and Pinkertons). It runs the app image,
@@ -17,6 +18,7 @@
 #   sed "s|image: oci.rrchnm.internal/rrchnm/apiary-django\$|image: oci.rrchnm.internal/rrchnm/apiary-django@$d|" k8s/restore.yaml | kubectl -n apiary apply -f -
 #   kubectl -n apiary logs -f job/postgres-restore -c verify-postgres
 #   kubectl -n apiary logs job/postgres-restore -c verify-sqlite
+#   kubectl -n apiary logs job/postgres-restore -c verify-bucket
 #
 # The CronJob alternates targets by weekday, so set RESTIC_REPOSITORY to whichever
 # server holds the night you want (backup1 here).
@@ -29,6 +31,12 @@
 #      with PGPASSWORD from Secret apiary-django key DB_PASS (as the backup's dump step).
 #   3. SQLite: mount the `sqlite` PVC read-write in verify-sqlite and copy
 #      /restore/dump/{bom,pinkertons}.sqlite3 over /data/ (as uid 10001).
+#   3b. Object storage: change verify-bucket's command to
+#        python -m apiary.bucket restore /restore/dump/bucket
+#      and give it the app's environment: envFrom secretRef `app` and
+#      configMapRef the app's current app-env-* (kubectl -n apiary get deploy app
+#      -o jsonpath='{.spec.template.spec.containers[0].envFrom[0].configMapRef.name}').
+#      It uploads every object in the backup's manifest; extra objects stay.
 #   4. Apply, watch it to completion, scale the Deployment back to 1, and check
 #      a known project's pages before declaring success.
 apiVersion: batch/v1
@@ -108,6 +116,21 @@ spec:
             limits: { cpu: 500m, memory: 256Mi }
           volumeMounts:
             - { name: restore, mountPath: /restore, readOnly: true }
+        - name: verify-bucket
+          image: oci.rrchnm.internal/rrchnm/apiary-django
+          command: ["python", "-m", "apiary.bucket", "check", "/restore/dump/bucket"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: restore, mountPath: /restore, readOnly: true }
       containers:
         # Every schema the app routes to should appear in the listing.
         - name: verify-postgres
@@ -137,7 +160,7 @@ spec:
             - { name: tmp, mountPath: /tmp }
       volumes:
         - name: restore
-          emptyDir: { sizeLimit: 4Gi }
+          emptyDir: { sizeLimit: 8Gi }
         - name: keys
           secret:
             secretName: restic
