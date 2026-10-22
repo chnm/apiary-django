@@ -6,8 +6,10 @@ Django itself stays WSGI:
 
     uvicorn apiary.mcp_server:app --host 0.0.0.0 --port 8001
 
-Agents authenticate with an APIToken as a bearer token. Every token may read
-every project for now; the site tools (apiary.sites) need a staff user.
+Agents authenticate with a bearer token: an OAuth access token, which an MCP
+client gets with its user's approval (this app is the authorization server,
+apiary.mcp_oauth), or an APIToken from the admin. Every token may read every
+project for now; the site tools (apiary.sites) need a staff user.
 """
 import base64
 import binascii
@@ -28,13 +30,22 @@ from django.core.serializers.json import DjangoJSONEncoder  # noqa: E402
 from django.db import connections, router  # noqa: E402
 from django.db.models import Avg, Count, Max, Min, Sum  # noqa: E402
 from mcp.server import MCPServer  # noqa: E402
-from mcp.server.auth.provider import AccessToken  # noqa: E402
 from mcp.server.auth.middleware.auth_context import get_access_token  # noqa: E402
-from mcp.server.auth.settings import AuthSettings  # noqa: E402
+from mcp.server.auth.provider import (  # noqa: E402
+    AccessToken,
+    AuthorizationCode,
+    AuthorizeError,
+    RefreshToken,
+    RegistrationError,
+    TokenError,
+)
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions  # noqa: E402
+from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
+from mcp.shared.auth import OAuthToken as TokenResponse  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 
-from apiary import sites  # noqa: E402
+from apiary import mcp_oauth, sites  # noqa: E402
 from apiary.api.datasets import api as datasets_api  # noqa: E402
 from apiary.models import APIToken  # noqa: E402
 from apiary.views import PROJECT_APPS  # noqa: E402
@@ -67,16 +78,106 @@ def jsonable(value):
     return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
 
 
-class APITokenVerifier:
-    async def verify_token(self, token: str) -> AccessToken | None:
-        api_token = await orm(APIToken.authenticate)(token)
-        if api_token is None:
+class OAuthProvider:
+    """
+    The SDK's authorization server hooks, over apiary.mcp_oauth. The SDK
+    validates each request (client, redirect URI, PKCE); these load and store
+    its state, and send /authorize on to Django's consent page.
+    """
+
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+        info = await orm(mcp_oauth.get_client)(client_id)
+        return OAuthClientInformationFull.model_validate(info) if info else None
+
+    async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        try:
+            await orm(mcp_oauth.register)(client_info.model_dump(mode="json", exclude_none=True))
+        except mcp_oauth.OAuthError as error:
+            raise RegistrationError(error.code, error.description) from error
+
+    async def authorize(self, client: OAuthClientInformationFull, params) -> str:
+        if params.resource and params.resource.rstrip("/") != mcp_oauth.resource_url():
+            raise AuthorizeError("invalid_target", f"This server issues tokens only for {mcp_oauth.resource_url()}.")
+        return mcp_oauth.consent_url({
+            "client_id": client.client_id,
+            "redirect_uri": str(params.redirect_uri),
+            "redirect_uri_provided_explicitly": params.redirect_uri_provided_explicitly,
+            "code_challenge": params.code_challenge,
+            "scopes": params.scopes or [],
+            "state": params.state,
+        })
+
+    async def load_authorization_code(self, client, authorization_code: str) -> AuthorizationCode | None:
+        grant = await orm(mcp_oauth.load_grant)(client.client_id, authorization_code)
+        if grant is None:
             return None
-        return AccessToken(
-            token=token,
-            client_id=f"apitoken-{api_token.pk}",
-            scopes=[],
-            subject=str(api_token.user_id),
+        return AuthorizationCode(
+            code=authorization_code,
+            client_id=client.client_id,
+            expires_at=grant.expires_at.timestamp(),
+            resource=mcp_oauth.resource_url(),
+            subject=str(grant.user_id),
+            **grant.request,
+        )
+
+    async def exchange_authorization_code(self, client, authorization_code: AuthorizationCode) -> TokenResponse:
+        return await self._issue(mcp_oauth.exchange_grant, client.client_id, authorization_code.code)
+
+    async def load_refresh_token(self, client, refresh_token: str) -> RefreshToken | None:
+        token = await orm(mcp_oauth.load_refresh)(client.client_id, refresh_token)
+        if token is None:
+            return None
+        return RefreshToken(
+            token=refresh_token,
+            client_id=client.client_id,
+            scopes=token.scopes,
+            expires_at=int(token.refresh_expires_at.timestamp()),
+            resource=mcp_oauth.resource_url(),
+            subject=str(token.user_id),
+        )
+
+    async def exchange_refresh_token(self, client, refresh_token: RefreshToken, scopes: list[str]) -> TokenResponse:
+        return await self._issue(mcp_oauth.rotate, client.client_id, refresh_token.token)
+
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        def find():
+            connection = mcp_oauth.authenticate(token)
+            if connection is not None:
+                return AccessToken(
+                    token=token,
+                    client_id=connection.client.client_id,
+                    scopes=connection.scopes,
+                    expires_at=int(connection.access_expires_at.timestamp()),
+                    resource=mcp_oauth.resource_url(),
+                    subject=str(connection.user_id),
+                )
+            api_token = APIToken.authenticate(token)
+            if api_token is not None:
+                return AccessToken(
+                    token=token,
+                    client_id=f"apitoken-{api_token.pk}",
+                    scopes=[],
+                    resource=mcp_oauth.resource_url(),
+                    subject=str(api_token.user_id),
+                )
+            return None
+        return await orm(find)()
+
+    async def revoke_token(self, token) -> None:
+        await orm(mcp_oauth.revoke)(token.token)
+
+    @staticmethod
+    async def _issue(exchange, client_id, raw) -> TokenResponse:
+        try:
+            connection, access, refresh = await orm(exchange)(client_id, raw)
+        except mcp_oauth.OAuthError as error:
+            raise TokenError(error.code, error.description) from error
+        return TokenResponse(
+            access_token=access,
+            token_type="Bearer",
+            expires_in=int(connection.ACCESS_LIFETIME.total_seconds()),
+            refresh_token=refresh,
+            scope=" ".join(connection.scopes) or None,
         )
 
 
@@ -163,11 +264,17 @@ mcp = MCPServer(
         "own host (<name>.sites.rrchnm.org): create_site, put_files (index.html required), attach_dataset to freeze a dataset "
         "into the site as JSON, then publish_site. Sites are versioned: rollback_site restores one."
     ),
-    token_verifier=APITokenVerifier(),
-    # The SDK only installs its bearer middleware with AuthSettings. Without a
-    # resource_server_url it publishes no OAuth metadata, so issuer_url is
-    # never used: tokens are issued in the Django admin, not by OAuth.
-    auth=AuthSettings(issuer_url="https://localhost", resource_server_url=None),
+    auth_server_provider=OAuthProvider(),
+    # The SDK serves the authorization server's metadata, /authorize, /token,
+    # /register and /revoke at MCP_URL, and the protected resource metadata
+    # for /mcp. Every token is issued for /mcp, so the SDK can refuse others.
+    auth=AuthSettings(
+        issuer_url=settings.MCP_URL,
+        resource_server_url=mcp_oauth.resource_url(),
+        validate_token_resource=True,
+        client_registration_options=ClientRegistrationOptions(enabled=True),
+        revocation_options=RevocationOptions(enabled=True),
+    ),
 )
 
 

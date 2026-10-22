@@ -121,6 +121,85 @@ class APIToken(BaseModel):
         return token
 
 
+class OAuthClient(BaseModel):
+    """
+    An MCP client (an AI agent's app) that registered itself for OAuth at
+    /register (RFC 7591), through apiary.mcp_oauth. Registering grants nothing:
+    a user still approves each client on the consent page.
+    """
+    client_id = models.CharField(max_length=64, unique=True, editable=False)
+    name = models.CharField(max_length=200, blank=True, editable=False)
+    # The registration as the MCP SDK returns it from get_client. Its
+    # client_secret, if any, is stored in clear because the SDK compares it
+    # directly; it only identifies the client, and a token still needs the
+    # user's approval and the PKCE verifier.
+    info = models.JSONField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table_comment = "OAuth clients registered by MCP clients"
+        verbose_name = "OAuth client"
+
+    def __str__(self):
+        return self.name or self.client_id
+
+
+class OAuthGrant(BaseModel):
+    """An authorization code, issued on the consent page and redeemed once at /token."""
+    LIFETIME = timedelta(minutes=5)
+
+    client = models.ForeignKey(OAuthClient, on_delete=models.CASCADE, related_name="grants")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="oauth_grants")
+    digest = models.CharField(max_length=64, unique=True)
+    # The authorization request: redirect_uri, redirect_uri_provided_explicitly,
+    # code_challenge, scopes and resource.
+    request = models.JSONField()
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        db_table_comment = "OAuth authorization codes awaiting exchange"
+
+
+class OAuthToken(BaseModel):
+    """
+    One user's connection of one MCP client: an access token and the refresh
+    token that renews it. Only SHA-256 digests are stored. Refreshing rotates
+    both in place; revoking deletes the row.
+    """
+    ACCESS_LIFETIME = timedelta(hours=1)
+    REFRESH_LIFETIME = timedelta(days=30)
+    LAST_USED_RESOLUTION = APIToken.LAST_USED_RESOLUTION
+
+    client = models.ForeignKey(OAuthClient, on_delete=models.CASCADE, related_name="tokens")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="oauth_tokens")
+    access_digest = models.CharField(max_length=64, unique=True, editable=False)
+    refresh_digest = models.CharField(max_length=64, unique=True, editable=False)
+    scopes = models.JSONField(default=list, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    access_expires_at = models.DateTimeField(editable=False)
+    refresh_expires_at = models.DateTimeField(editable=False)
+    last_used_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        db_table_comment = "MCP clients' OAuth access and refresh tokens"
+        verbose_name = "MCP connection"
+
+    def __str__(self):
+        return f"{self.client} for {self.user}"
+
+    hash = staticmethod(APIToken.hash)
+
+    def rotate(self):
+        """Set new access and refresh tokens and their expiry; return (access, refresh)."""
+        access = "apiary_at_" + secrets.token_urlsafe(32)
+        refresh = "apiary_rt_" + secrets.token_urlsafe(32)
+        now = timezone.now()
+        self.access_digest, self.refresh_digest = self.hash(access), self.hash(refresh)
+        self.access_expires_at = now + self.ACCESS_LIFETIME
+        self.refresh_expires_at = now + self.REFRESH_LIFETIME
+        return access, refresh
+
+
 class DataSnapshot(BaseModel):
     """
     One project's rows at a moment, stored as files (apiary.projectdata).

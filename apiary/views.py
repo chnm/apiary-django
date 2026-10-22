@@ -8,19 +8,24 @@ import time
 import sys
 import json
 from pathlib import Path
+from urllib.parse import urlsplit
 from django.apps import apps
+from django.contrib import admin
+from django.core import signing
 from django.db import connections, router
 from django.urls import reverse
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.storage import storages
-from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.http import FileResponse, Http404, HttpResponseRedirect, StreamingHttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
+from apiary import mcp_oauth
 from apiary.decorators import superuser_required
+from apiary.models import OAuthClient
 from apiary.export import write_project_zip
 from apiary.status import snapshot
 
@@ -328,3 +333,38 @@ def status_stream(request):
     response = StreamingHttpResponse(events(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
     return response
+
+
+class ClientRedirect(HttpResponseRedirect):
+    """A redirect to an MCP client, whose registered URI may use the app's own scheme."""
+    def __init__(self, url):
+        self.allowed_schemes = [urlsplit(url).scheme]
+        super().__init__(url)
+
+
+@staff_member_required
+def mcp_authorize(request):
+    """
+    The consent page an MCP client's /authorize leads to (apiary.mcp_oauth):
+    approving issues the authorization code and returns to the client.
+    """
+    try:
+        oauth_request = mcp_oauth.load_request(request.POST.get('request') or request.GET.get('request'))
+    except signing.BadSignature:
+        return render(request, 'admin/apiary/mcp_authorize.html', {
+            **admin.site.each_context(request), 'title': 'Connect an MCP client', 'expired': True,
+        }, status=400)
+    client = get_object_or_404(OAuthClient, client_id=oauth_request['client_id'])
+    if request.method == 'POST':
+        if 'approve' in request.POST:
+            return ClientRedirect(mcp_oauth.approve(request.user, client, oauth_request))
+        return ClientRedirect(mcp_oauth.deny(oauth_request))
+    return render(request, 'admin/apiary/mcp_authorize.html', {
+        **admin.site.each_context(request),
+        'title': 'Connect an MCP client',
+        'client': client,
+        'client_uri': client.info.get('client_uri'),
+        'redirect_to': urlsplit(oauth_request['redirect_uri']),
+        'mcp_url': mcp_oauth.resource_url(),
+        'request_token': request.GET.get('request'),
+    })

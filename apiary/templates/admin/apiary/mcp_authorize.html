@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="border border-base-200 rounded-default shadow-xs max-w-2xl dark:border-base-800">
+{% if expired %}
+    <div class="flex flex-col gap-3 p-4">
+        <p class="font-semibold">This connection request has expired or isn't valid.</p>
+        <p>Start connecting again from your MCP client. Requests are valid for 10 minutes.</p>
+    </div>
+{% else %}
+    <div class="flex flex-col gap-3 p-4">
+        <p><strong>{{ client.name|default:"An unnamed MCP client" }}</strong> wants to use Apiary as <strong>{{ user.get_username }}</strong>.</p>
+        <p>If you allow it, it can:</p>
+        <ul class="list-disc pl-6">
+            <li>read every project's data through <code>{{ mcp_url }}</code></li>
+            <li>create, publish and change static sites as you</li>
+        </ul>
+        <p>You'll return to <code>{{ redirect_to.scheme }}://{{ redirect_to.netloc }}</code>.{% if client_uri %} The client says it is <code>{{ client_uri }}</code>.{% endif %}
+            Allow only clients you started yourself.</p>
+        <p class="text-sm">The connection lasts up to 30 days without use. A superuser can end it any time under MCP connections.</p>
+    </div>
+    <form method="post" class="border-base-200 border-t flex gap-3 p-4 dark:border-base-800">
+        {% csrf_token %}
+        <input type="hidden" name="request" value="{{ request_token }}">
+        {% component "unfold/components/button.html" with submit=1 name="approve" variant="primary" %}Allow{% endcomponent %}
+        {% component "unfold/components/button.html" with submit=1 name="deny" variant="default" %}Deny{% endcomponent %}
+    </form>
+{% endif %}
+</div>
+{% endblock %}

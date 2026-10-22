@@ -25,3 +25,7 @@ for _alias, _visibility in (("default", "private"), ("public", "public")):
         "BACKEND": "django.core.files.storage.FileSystemStorage",
         "OPTIONS": {"location": f"{_media}/{_visibility}", "base_url": f"/media/{_visibility}/"},
     }
+
+# Both apps answer the test clients on these origins.
+APP_URL = "http://testserver"
+MCP_URL = "http://localhost"

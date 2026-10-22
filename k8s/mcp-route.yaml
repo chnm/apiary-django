@@ -1,4 +1,6 @@
-# /mcp to the MCP container (Service port 8001). A route of its own, not a rule
+# /mcp and its OAuth authorization server (apiary.mcp_oauth: metadata,
+# /authorize, /token, /register, /revoke) to the MCP container (Service port
+# 8001). Django serves only the consent page. A route of its own, not a rule
 # in the component's app route: the Argo app sets RespectIgnoreDifferences on
 # .spec.rules[].backendRefs[], so an apply keeps the live rules list and an
 # added rule never lands. The gateway prefers this longer path over app's /.
@@ -14,5 +16,11 @@ spec:
   rules:
     - matches:
         - path: { type: PathPrefix, value: /mcp }
+        - path: { type: PathPrefix, value: /.well-known/oauth-protected-resource }
+        - path: { type: Exact, value: /.well-known/oauth-authorization-server }
+        - path: { type: Exact, value: /authorize }
+        - path: { type: Exact, value: /token }
+        - path: { type: Exact, value: /register }
+        - path: { type: Exact, value: /revoke }
       backendRefs:
         - { group: "", kind: Service, name: app, port: 8001, weight: 1 }

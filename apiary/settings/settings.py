@@ -35,6 +35,13 @@ SITES_URL = env("SITES_URL", default="https://{name}.%s/" % SITES_DOMAIN)
 if SITES_DOMAIN:
     ALLOWED_HOSTS = [*ALLOWED_HOSTS, f".{SITES_DOMAIN}"]
 
+# OAuth for MCP clients (apiary.mcp_oauth). The MCP container serves /mcp and
+# is the authorization server at MCP_URL; Django's login and consent page at
+# APP_URL approve each client. One host in k8s, two ports in Compose.
+APP_FQDN = env("APP_FQDN", default="")
+APP_URL = env("APP_URL", default=f"https://{APP_FQDN}" if APP_FQDN else "http://localhost:8000")
+MCP_URL = env("MCP_URL", default=f"https://{APP_FQDN}" if APP_FQDN else "http://localhost:8001")
+
 # Application definition
 
 INSTALLED_APPS = [

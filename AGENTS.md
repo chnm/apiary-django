@@ -191,10 +191,21 @@ read tools for any token, site tools for staff. It is an ASGI app under uvicorn,
 WSGI: a second container in the k8s app pod (it reads the node-local SQLite
 files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 
-- Auth: `Authorization: Bearer <token>`, an `APIToken` (`apiary/models.py`)
-  that superusers create and revoke in the admin (API Tokens). Only its SHA-256
-  digest is stored; the token is shown once. Every token can read every
-  project for now.
+- Auth: `Authorization: Bearer <token>`, either an OAuth access token or an
+  `APIToken` (`apiary/models.py`) that superusers create and revoke in the
+  admin (API Tokens; shown once). Only SHA-256 digests of tokens are stored.
+  Every token can read every project for now.
+- OAuth (`apiary/mcp_oauth.py`): the MCP container is the authorization
+  server, on the SDK's handlers, at `MCP_URL`: metadata, `/register` (dynamic
+  client registration), `/authorize`, `/token`, `/revoke`, and the protected
+  resource metadata for `/mcp`. `/authorize` sends the browser to Django's
+  consent page (`/apiary/mcp/authorize/`, behind Django's login, at
+  `APP_URL`), which issues the code. Only active staff can connect, checked
+  again on every request and refresh. Codes last 5 minutes, access tokens an
+  hour, refresh tokens 30 days and rotate on use; every token is issued for
+  `/mcp` alone. Admin > MCP connections lists and ends connections; clients
+  that registered but never connected are dropped after a day. The gateway
+  routes those paths to the MCP container (`k8s/mcp-route.yaml`).
 - Read tools: `list_projects`, `query_records`, `get_record`, `aggregate`,
   `list_datasets`, `list_sites`. Field paths are checked against the model's
   own project, so filters cannot reach auth tables or another project.

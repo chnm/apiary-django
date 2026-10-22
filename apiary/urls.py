@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/', include(crud.router.urls)),
     path('api/', datasets.api.urls),
     path('apiary/whoami/', views.whoami_page, name='apiary_whoami_page'),
+    path('apiary/mcp/authorize/', views.mcp_authorize, name='apiary_mcp_authorize'),
     path('apiary/mgmt/', views.management_commands_dashboard, name='apiary_management_commands_dashboard'),
     path('apiary/run-command/', views.run_management_command, name='run_management_command'),
     path('apiary/export/', views.export_project, name='apiary_export_project'),
