@@ -9,7 +9,8 @@ from django.contrib.auth.models import User, Group
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from unfold.admin import ModelAdmin
 
-from .models import APIToken, Project
+from . import pages
+from .models import APIToken, DataSnapshot, Project, Site, SiteVersion
 
 
 admin.site.unregister(User)
@@ -99,3 +100,77 @@ class APITokenAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return self.has_module_permission(request)
+
+
+class SuperuserOnly:
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+
+@admin.register(DataSnapshot)
+class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
+    """
+    Read-only: snapshots are taken and restored with the snapshot_project and
+    restore_project_snapshot commands (/apiary/mgmt/). Deleting a row here
+    leaves its files in storage.
+    """
+    list_display = ['id', 'project', 'kind', 'label', 'created_at', 'created_by', 'rows', 'size']
+    list_filter = ['project', 'kind']
+    readonly_fields = ['key', 'project', 'kind', 'label', 'created_at', 'created_by',
+                       'row_counts', 'migrations', 'sha256', 'size']
+
+    @admin.display(description='Rows')
+    def rows(self, obj):
+        return sum(obj.row_counts.values())
+
+
+class SiteVersionInline(admin.TabularInline):
+    model = SiteVersion
+    extra = 0
+    can_delete = False
+    fields = ['number', 'published_at', 'created_by', 'file_count', 'datasets', 'data_snapshot']
+    readonly_fields = fields
+
+    @admin.display(description='Files')
+    def file_count(self, obj):
+        return len(obj.files)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Site)
+class SiteAdmin(SuperuserOnly, ModelAdmin):
+    """Sites are built by staff through MCP; here superusers review and unpublish them."""
+    list_display = ['__str__', 'title', 'live', 'url', 'created_by', 'created_at']
+    list_filter = ['project']
+    readonly_fields = ['project', 'name', 'title', 'created_by', 'created_at', 'live_version', 'url']
+    inlines = [SiteVersionInline]
+    actions = ['unpublish']
+
+    @admin.display(description='Live version')
+    def live(self, obj):
+        return obj.live_version.number if obj.live_version else 'unpublished'
+
+    @admin.display(description='URL')
+    def url(self, obj):
+        return pages.site_url(obj)
+
+    @admin.action(description='Unpublish selected sites')
+    def unpublish(self, request, queryset):
+        for site in queryset:
+            pages.unpublish(site)
+        self.message_user(request, f'Unpublished {queryset.count()} site(s).')
+

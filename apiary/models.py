@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
@@ -118,3 +119,108 @@ class APIToken(BaseModel):
         if token.last_used_at is None or now - token.last_used_at > cls.LAST_USED_RESOLUTION:
             cls.objects.filter(pk=token.pk).update(last_used_at=now)
         return token
+
+
+class DataSnapshot(BaseModel):
+    """
+    One project's rows at a moment, stored as files (apiary.projectdata).
+    The row here is the index; the data lives in private storage.
+    """
+    KINDS = [
+        ("manual", "Manual"),
+        ("pre-restore", "Before a restore"),
+        ("pre-reset", "Before a reset"),
+        ("page", "Page publish"),
+    ]
+
+    # In the storage path, so a reused id (a restored or reset database) can
+    # never point at another snapshot's files.
+    key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    project = models.CharField(max_length=50)
+    kind = models.CharField(max_length=20, choices=KINDS)
+    label = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    row_counts = models.JSONField(default=dict)
+    migrations = models.JSONField(default=list, help_text="The project's applied migrations when taken.")
+    sha256 = models.CharField(max_length=64)
+    size = models.PositiveBigIntegerField()
+
+    class Meta:
+        db_table_comment = "Index of project data snapshots kept in object storage"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"#{self.pk} {self.project} {self.kind} {self.created_at:%Y-%m-%d %H:%M}"
+
+    @property
+    def prefix(self):
+        return f"snapshots/{self.project}/{self.key}/"
+
+    @property
+    def data_path(self):
+        return f"{self.prefix}data.json.gz"
+
+    @property
+    def manifest_path(self):
+        return f"{self.prefix}manifest.json"
+
+    def manifest(self):
+        return {
+            "format": 1, "id": self.pk, "key": str(self.key), "project": self.project, "kind": self.kind, "label": self.label,
+            "created_at": self.created_at.isoformat(), "created_by": getattr(self.created_by, "username", None),
+            "row_counts": self.row_counts, "migrations": self.migrations,
+            "data": {"path": "data.json.gz", "format": "django-json+gzip", "sha256": self.sha256, "size": self.size},
+        }
+
+
+class Site(BaseModel):
+    """A static site on the pages host, at /<project>/<name>/."""
+    # In the storage path, so a site recreated under an old name starts clean.
+    key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    project = models.CharField(max_length=50)
+    name = models.SlugField(max_length=50)
+    title = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    live_version = models.ForeignKey("SiteVersion", null=True, blank=True, on_delete=models.SET_NULL,
+                                     related_name="+", help_text="The version served; empty when unpublished.")
+
+    class Meta:
+        db_table_comment = "Static sites published to the pages host"
+        constraints = [models.UniqueConstraint(fields=["project", "name"], name="site_project_name")]
+
+    def __str__(self):
+        return f"{self.project}/{self.name}"
+
+
+class SiteVersion(BaseModel):
+    """
+    One immutable set of a site's files, under pages/<project>/<site key>/v<number>/.
+    The newest unpublished version is the draft that tools write into.
+    """
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="versions")
+    number = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    files = models.JSONField(default=dict, help_text="path -> {size, sha256, content_type}")
+    datasets = models.JSONField(default=dict, help_text="path -> dataset URL, captured when published")
+    published_at = models.DateTimeField(null=True, blank=True)
+    data_snapshot = models.ForeignKey(DataSnapshot, null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name="+", help_text="The project data its datasets were read from.")
+
+    class Meta:
+        db_table_comment = "Versions of static sites; published ones are immutable"
+        constraints = [models.UniqueConstraint(fields=["site", "number"], name="siteversion_site_number")]
+        ordering = ["-number"]
+
+    def __str__(self):
+        return f"{self.site} v{self.number}"
+
+    @property
+    def prefix(self):
+        return f"pages/{self.site.project}/{self.site.key}/v{self.number}/"
+

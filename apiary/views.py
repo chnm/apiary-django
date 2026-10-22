@@ -60,6 +60,27 @@ ALLOWED_COMMANDS = {
         ],
         'timeout': 120
     },
+    'snapshot_project': {
+        'name': 'Snapshot Project Data',
+        'description': "Save a copy of a project's data to object storage. Admin > Data snapshots lists them.",
+        'args': [
+            {'name': 'project', 'type': 'select', 'choices': PROJECT_APPS, 'required': True},
+            {'name': 'label', 'type': 'text', 'default': '', 'placeholder': 'optional note', 'required': False},
+        ],
+        'timeout': 120
+    },
+    'restore_project_snapshot': {
+        'name': 'Restore Project Snapshot',
+        'description': (
+            "Replace a project's data with a snapshot's. The current data is snapshotted first, "
+            "so this can be undone. Type the snapshot's project name to confirm."
+        ),
+        'args': [
+            {'name': 'snapshot', 'type': 'number', 'default': '', 'placeholder': 'snapshot number', 'required': True},
+            {'name': 'confirm', 'type': 'text', 'default': '', 'placeholder': 'project name', 'required': True},
+        ],
+        'timeout': 180
+    },
 }
 
 ROW_LIMIT = 100
