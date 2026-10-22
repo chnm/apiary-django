@@ -220,6 +220,12 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   own): take one, compare a snapshot's rows with the current ones and restore
   it (typing the project name), download its data, delete it with its files.
   The schema column shows which are restorable.
+- Explore (on a snapshot's page) browses it as it was taken, one table per
+  model with search, paging and links between related rows, read from the
+  snapshot alone so older schemas open too. Its SQL console runs DuckDB-WASM
+  (jsDelivr, pinned) in the browser over the same tables, served as NDJSON by a
+  superuser-only admin URL; nothing runs on the server. DuckDB's Python wheels
+  are glibc-only, so it cannot run in the StageX (musl) image.
 - Export / Import move a snapshot between environments as a zip bundle
   (`manifest.json` + `data.json.gz`, format 1). Import checks the checksum,
   the project, and that every record belongs to that project; restore checks
@@ -276,7 +282,8 @@ cookies.
 - Admin > Sites (superusers; each project's sidebar section links its own):
   create a site, upload a zip into its draft (put_files' checks; a single
   top folder is stripped), publish, roll back, unpublish (both confirm on
-  POST), and delete with its files.
+  POST), and delete with its files and the snapshots taken to publish it
+  (kind `site`, unless another site's version uses one).
 
 ### Model Architecture
 

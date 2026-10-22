@@ -1,9 +1,15 @@
 from django import forms
 from django.contrib import admin, messages
 from django.core.files.storage import storages
+import json
 import tempfile
 
-from django.http import FileResponse, HttpResponseRedirect
+from django.apps import apps
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.core.serializers.json import DjangoJSONEncoder
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
+from django.urls import path
 from django.utils.html import format_html
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -167,7 +173,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     readonly_fields = ['key', 'project', 'kind', 'label', 'created_at', 'created_by',
                        'row_counts', 'migrations', 'schema', 'sha256', 'size', 'used_by']
     actions_list = ['take_snapshot', 'import_snapshot']
-    actions_detail = ['restore', 'export', 'download']
+    actions_detail = ['explore', 'restore', 'export', 'download']
 
     def get_list_display(self, request):
         # One migration lookup per project for this request, not one per row.
@@ -261,6 +267,79 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
                          applied=applied,
                          rows=[(t, snapshot.row_counts.get(t, 0), current.get(t, 0)) for t in tables],
                          used_by=self.used_by(snapshot))
+
+    EXPLORE_PAGE_SIZE = 100
+
+    def get_urls(self):
+        return [
+            path('<path:object_id>/explore/<slug:table>.ndjson', self.admin_site.admin_view(self.explore_data),
+                 name='apiary_datasnapshot_explore_data'),
+        ] + super().get_urls()
+
+    def snapshot_or_404(self, request, object_id):
+        snapshot = self.get_object(request, object_id)
+        if snapshot is None:
+            raise Http404
+        return snapshot
+
+    @staticmethod
+    def relation_links(project, table):
+        """field -> related table, from the current model if it still has that field."""
+        try:
+            model = apps.get_model(project, table)
+        except LookupError:
+            return {}
+        return {field.name: field.related_model._meta.model_name for field in model._meta.concrete_fields
+                if field.is_relation and field.related_model._meta.app_label == project}
+
+    @staticmethod
+    def cell(value):
+        if value is None:
+            return ''
+        if isinstance(value, (dict, list)):
+            return json.dumps(value)
+        return str(value)
+
+    @action(description='Explore', url_path='explore', icon='table_view', permissions=['superuser'])
+    def explore(self, request, object_id):
+        snapshot = self.snapshot_or_404(request, object_id)
+        tables = projectdata.snapshot_tables(snapshot)
+        name = request.GET.get('table') or next(iter(tables), None)
+        if name is not None and name not in tables:
+            raise Http404
+        everything = tables.get(name, [])
+        columns = list(dict.fromkeys(column for row in everything for column in row))  # id first
+        rows = everything
+        wanted = request.GET.get('id', '').strip()
+        if wanted:
+            rows = [row for row in rows if str(row['id']) == wanted]
+        search = request.GET.get('q', '').strip()
+        if search:
+            needle = search.lower()
+            rows = [row for row in rows if any(needle in self.cell(value).lower() for value in row.values())]
+        page = Paginator(rows, self.EXPLORE_PAGE_SIZE).get_page(request.GET.get('page'))
+        links = self.relation_links(snapshot.project, name) if name else {}
+        body = [[(self.cell(row.get(column)), links.get(column) if row.get(column) is not None else None)
+                 for column in columns] for row in page]
+        console = [{'name': table, 'rows': len(table_rows),
+                    'url': reverse('admin:apiary_datasnapshot_explore_data', args=[snapshot.pk, table])}
+                   for table, table_rows in tables.items()]
+        return self.page(request, 'datasnapshot/explore.html', f'Explore snapshot #{snapshot.pk} of {snapshot.project}',
+                         snapshot=snapshot, tables={t: len(r) for t, r in tables.items()}, table=name,
+                         columns=columns, body=body, page=page, search=search, wanted=wanted,
+                         matched=len(rows), console=console)
+
+    def explore_data(self, request, object_id, table):
+        """One snapshot table as newline-delimited JSON, for the SQL console."""
+        if not self.has_superuser_permission(request):
+            raise PermissionDenied
+        rows = projectdata.snapshot_tables(self.snapshot_or_404(request, object_id)).get(table)
+        if rows is None:
+            raise Http404
+        response = HttpResponse(''.join(json.dumps(row, cls=DjangoJSONEncoder) + '\n' for row in rows),
+                                content_type='application/x-ndjson')
+        response['Cache-Control'] = 'private, max-age=3600'  # snapshots never change
+        return response
 
     @action(description='Export', url_path='export', icon='archive', permissions=['superuser'])
     def export(self, request, object_id):
@@ -380,6 +459,16 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+    def get_deleted_objects(self, objs, request):
+        # List the publish snapshots too, so the confirmation shows all that goes.
+        deleted, counts, perms_needed, protected = super().get_deleted_objects(objs, request)
+        snapshots = [snapshot for site in objs for snapshot in sites.publish_snapshots(site)]
+        if snapshots:
+            deleted.append([f"Data snapshot (taken to publish it, with its files): {snapshot}"
+                            for snapshot in snapshots])
+            counts[DataSnapshot._meta.verbose_name_plural] = len(snapshots)
+        return deleted, counts, perms_needed, protected
 
     def delete_model(self, request, obj):
         sites.delete_site(obj)

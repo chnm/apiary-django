@@ -1,4 +1,5 @@
 import gzip
+import io
 import json
 from datetime import timedelta
 from io import StringIO
@@ -114,3 +115,73 @@ class PruneTests(TestCase):
         # Kept: manual, the one a site version uses, and the newest automatic (keep=1).
         self.assertEqual(set(DataSnapshot.objects.values_list("pk", flat=True)), {manual.pk, used.pk, recent.pk})
         self.assertFalse(any(storages["default"].exists(s.data_path) for s in old))
+
+
+class ExploreTests(TestCase):
+    databases = "__all__"
+
+    def setUp(self):
+        from pinkertons.models import Activity, Location
+
+        self.root = User.objects.create_superuser("root", password="x")
+        self.client.force_login(self.root)
+        self.bank = Location.objects.create(location_name="Corn Exchange Bank", locality="Manhattan")
+        for i in range(105):
+            Activity.objects.create(investigation="nyc", operative=f"Operative {i}", activity="Shadowing",
+                                    notes="<script>alert(1)</script>" if i == 0 else "", location=self.bank)
+        self.snapshot, _ = projectdata.take_snapshot("pinkertons", kind="manual")
+        self.url = f"{ADMIN}{self.snapshot.pk}/explore/"
+
+    def test_browse_tables_rows_relations_search_and_pages(self):
+        page = self.client.get(self.url).content.decode()  # first table: activity
+        self.assertIn("activity <span", page)
+        self.assertIn("location <span", page)
+        self.assertIn("105 rows, page 1 of 2", page)
+        self.assertIn(f'href="?table=location&amp;id={self.bank.pk}"', page)  # related row link
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", page)  # escaped, never markup
+        self.assertNotIn("<script>alert(1)</script>", page)
+
+        found = self.client.get(self.url, {"table": "activity", "q": "operative 42"}).content.decode()
+        self.assertIn("1 row match", found)
+        self.assertIn("Operative 42", found)
+
+        row = self.client.get(self.url, {"table": "location", "id": self.bank.pk}).content.decode()
+        self.assertIn("Row id", row)
+        self.assertIn("Corn Exchange Bank", row)
+
+        self.assertIn("Operative 104", self.client.get(self.url, {"table": "activity", "page": 2}).content.decode())
+        self.assertEqual(self.client.get(self.url, {"table": "nope"}).status_code, 404)
+
+    def test_console_data_is_one_ndjson_table_per_model(self):
+        page = self.client.get(self.url).content.decode()
+        data_url = f"{ADMIN}{self.snapshot.pk}/explore/location.ndjson"
+        self.assertIn(data_url, page)  # in the console's table list
+        response = self.client.get(data_url)
+        self.assertEqual(response["Content-Type"], "application/x-ndjson")
+        rows = [json.loads(line) for line in response.content.decode().splitlines()]
+        self.assertEqual(rows[0]["id"], self.bank.pk)
+        self.assertEqual(rows[0]["location_name"], "Corn Exchange Bank")
+        self.assertEqual(self.client.get(f"{ADMIN}{self.snapshot.pk}/explore/nope.ndjson").status_code, 404)
+
+        staff = User.objects.create_user("staff", is_staff=True)
+        self.client.force_login(staff)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(self.client.get(data_url).status_code, 403)
+
+    def test_opens_a_snapshot_from_an_older_schema(self):
+        records = [
+            {"model": "pinkertons.location", "pk": 1, "fields": {"locality": "Atlanta", "retired_field": "kept"}},
+            {"model": "pinkertons.gone", "pk": 9, "fields": {"name": "a table since removed"}},
+        ]
+        payload = gzip.compress(json.dumps(records).encode())
+        storage = storages["default"]
+        storage.delete(self.snapshot.data_path)
+        storage.save(self.snapshot.data_path, io.BytesIO(payload))
+        snapshot = DataSnapshot.objects.create(project="pinkertons", kind="manual", sha256="x", size=len(payload))
+        storage.save(snapshot.data_path, io.BytesIO(payload))
+
+        page = self.client.get(f"{ADMIN}{snapshot.pk}/explore/", {"table": "location"}).content.decode()
+        self.assertIn("retired_field", page)
+        self.assertIn("kept", page)
+        gone = self.client.get(f"{ADMIN}{snapshot.pk}/explore/", {"table": "gone"}).content.decode()
+        self.assertIn("a table since removed", gone)
