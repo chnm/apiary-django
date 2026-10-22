@@ -216,9 +216,15 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   another schema. It verifies the checksum before touching data, snapshots the
   current rows first (so every restore can be undone), then flushes and loads
   in one transaction.
-- `snapshot_project`, `restore_project_snapshot` and `reset_project_data`
-  (which snapshots first) run from `/apiary/mgmt/`; Admin > Data snapshots
-  lists them. Future live schema changes should snapshot through this.
+- Admin > Data Snapshots (superusers): take one, compare a snapshot's rows
+  with the current ones and restore it (typing the project name), download its
+  data, delete it with its files. The schema column shows which are restorable.
+- `snapshot_project`, `restore_project_snapshot`, `reset_project_data` (which
+  snapshots first) and `prune_snapshots` also run from `/apiary/mgmt/`.
+  Pruning removes only automatic snapshots past retention (newest 10 per
+  project and the last 30 days kept), never manual ones or those a site
+  version was built from. Future live schema changes should snapshot through
+  this.
 
 ### Pages
 

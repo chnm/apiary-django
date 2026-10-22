@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.core.files.storage import storages
+from django.http import FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -8,8 +11,12 @@ from django.contrib.auth.models import User, Group
 
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from unfold.admin import ModelAdmin
+from unfold.decorators import action
+from unfold.enums import ActionVariant
+from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget
 
-from . import pages
+from . import pages, projectdata
+from .views import PROJECT_APPS
 from .models import APIToken, DataSnapshot, Project, Site, SiteVersion
 
 
@@ -106,6 +113,9 @@ class SuperuserOnly:
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_superuser
 
+    def has_superuser_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
     def has_view_permission(self, request, obj=None):
         return self.has_module_permission(request)
 
@@ -119,21 +129,118 @@ class SuperuserOnly:
         return self.has_module_permission(request)
 
 
+class TakeSnapshotForm(forms.Form):
+    project = forms.ChoiceField(choices=[(p, p) for p in PROJECT_APPS], widget=UnfoldAdminSelectWidget)
+    label = forms.CharField(required=False, max_length=200, widget=UnfoldAdminTextInputWidget,
+                            help_text='Optional note, e.g. why you took it.')
+
+
+class RestoreForm(forms.Form):
+    confirm = forms.CharField(widget=UnfoldAdminTextInputWidget, help_text='Type the project name to confirm.')
+
+    def __init__(self, *args, project, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.project = project
+
+    def clean_confirm(self):
+        if self.cleaned_data['confirm'] != self.project:
+            raise forms.ValidationError(f'Type "{self.project}" to confirm.')
+        return self.cleaned_data['confirm']
+
+
 @admin.register(DataSnapshot)
 class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     """
-    Read-only: snapshots are taken and restored with the snapshot_project and
-    restore_project_snapshot commands (/apiary/mgmt/). Deleting a row here
-    leaves its files in storage.
+    Superusers take, compare, restore, download and delete project data
+    snapshots (apiary.projectdata). Deleting one deletes its files too.
     """
-    list_display = ['id', 'project', 'kind', 'label', 'created_at', 'created_by', 'rows', 'size']
-    list_filter = ['project', 'kind']
+    list_filter = ['project', 'kind', 'created_at']
+    search_fields = ['label']
     readonly_fields = ['key', 'project', 'kind', 'label', 'created_at', 'created_by',
-                       'row_counts', 'migrations', 'sha256', 'size']
+                       'row_counts', 'migrations', 'schema', 'sha256', 'size', 'used_by']
+    actions_list = ['take_snapshot']
+    actions_detail = ['restore', 'download']
+
+    def get_list_display(self, request):
+        # One migration lookup per project for this request, not one per row.
+        applied = {project: projectdata.applied_migrations(project) for project in PROJECT_APPS}
+
+        @admin.display(description='Schema')
+        def schema(obj):
+            return 'current' if obj.migrations == applied[obj.project] else 'older (not restorable)'
+
+        return ['id', 'project', 'kind', 'label', 'created_at', 'created_by', 'rows', 'size_kb', schema]
 
     @admin.display(description='Rows')
     def rows(self, obj):
         return sum(obj.row_counts.values())
+
+    @admin.display(description='Size (KB)')
+    def size_kb(self, obj):
+        return round(obj.size / 1024, 1)
+
+    @admin.display(description='Schema')
+    def schema(self, obj):
+        current = projectdata.applied_migrations(obj.project)
+        return 'current' if obj.migrations == current else 'older (not restorable)'
+
+    @admin.display(description='Page versions built from it')
+    def used_by(self, obj):
+        versions = SiteVersion.objects.filter(data_snapshot=obj).select_related('site')
+        return ', '.join(str(v) for v in versions) or '-'
+
+    def delete_model(self, request, obj):
+        projectdata.delete_snapshot(obj)
+
+    def delete_queryset(self, request, queryset):
+        for snapshot in queryset:
+            projectdata.delete_snapshot(snapshot)
+
+    def page(self, request, template, title, **context):
+        return TemplateResponse(request, f'admin/apiary/datasnapshot/{template}', {
+            **self.admin_site.each_context(request), 'opts': self.opts, 'title': title, **context,
+        })
+
+    # Unfold's action views only require staff; permissions applies has_superuser_permission.
+    @action(description='Take snapshot', url_path='take', icon='add_a_photo', permissions=['superuser'])
+    def take_snapshot(self, request):
+        form = TakeSnapshotForm(request.POST or None)
+        if request.method == 'POST' and form.is_valid():
+            snapshot, _ = projectdata.take_snapshot(form.cleaned_data['project'], kind='manual',
+                                                    user=request.user, label=form.cleaned_data['label'])
+            self.message_user(request, f'Took snapshot #{snapshot.pk} of {snapshot.project}.', messages.SUCCESS)
+            return HttpResponseRedirect(reverse('admin:apiary_datasnapshot_change', args=[snapshot.pk]))
+        return self.page(request, 'take.html', 'Take a data snapshot', form=form)
+
+    @action(description='Restore', url_path='restore', icon='restore', variant=ActionVariant.DANGER,
+            permissions=['superuser'])
+    def restore(self, request, object_id):
+        snapshot = self.get_object(request, object_id)
+        current = projectdata.row_counts(snapshot.project)
+        applied = projectdata.applied_migrations(snapshot.project)
+        compatible = snapshot.migrations == applied
+        form = RestoreForm(request.POST or None, project=snapshot.project)
+        if request.method == 'POST' and compatible and form.is_valid():
+            try:
+                before = projectdata.restore_snapshot(snapshot, user=request.user)
+            except projectdata.SnapshotError as error:
+                self.message_user(request, str(error), messages.ERROR)
+            else:
+                self.message_user(request, f'Restored {snapshot.project} from snapshot #{snapshot.pk}. '
+                                           f'Snapshot #{before.pk} holds the data it replaced.', messages.SUCCESS)
+                return HttpResponseRedirect(reverse('admin:apiary_datasnapshot_change', args=[before.pk]))
+        tables = sorted(set(snapshot.row_counts) | set(current))
+        return self.page(request, 'restore.html', f'Restore {snapshot.project} from snapshot #{snapshot.pk}',
+                         snapshot=snapshot, form=form, compatible=compatible,
+                         applied=applied,
+                         rows=[(t, snapshot.row_counts.get(t, 0), current.get(t, 0)) for t in tables],
+                         used_by=self.used_by(snapshot))
+
+    @action(description='Download data', url_path='download', icon='download', permissions=['superuser'])
+    def download(self, request, object_id):
+        snapshot = self.get_object(request, object_id)
+        return FileResponse(storages['default'].open(snapshot.data_path, 'rb'), as_attachment=True,
+                            filename=f'{snapshot.project}-snapshot-{snapshot.pk}.json.gz')
 
 
 class SiteVersionInline(admin.TabularInline):

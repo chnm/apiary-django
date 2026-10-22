@@ -166,3 +166,32 @@ def restore_snapshot(snapshot, *, user=None):
         return before
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+AUTOMATIC = ("pre-restore", "pre-reset", "page")
+
+
+def delete_snapshot(snapshot):
+    """Delete the snapshot's files, then its row."""
+    storage = storages["default"]
+    for name in (snapshot.data_path, snapshot.manifest_path):
+        if storage.exists(name):
+            storage.delete(name)
+    snapshot.delete()
+
+
+def prunable(*, keep, older_than):
+    """
+    Automatic snapshots past retention: beyond the newest `keep` of each
+    project and older than `older_than` (a datetime). Manual snapshots are
+    never pruned, nor ones a site version was built from.
+    """
+    from apiary.models import DataSnapshot, SiteVersion
+
+    in_use = set(SiteVersion.objects.exclude(data_snapshot=None).values_list("data_snapshot", flat=True))
+    candidates = []
+    for project in PROJECT_APPS:
+        automatic = DataSnapshot.objects.filter(project=project, kind__in=AUTOMATIC).order_by("-created_at")
+        candidates += [s for s in automatic[keep:] if s.created_at < older_than and s.pk not in in_use]
+    return candidates
+
