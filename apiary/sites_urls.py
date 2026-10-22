@@ -1,9 +1,9 @@
-"""The URL space of a site's own host, <name>.SITES_DOMAIN (apiary.pages)."""
+"""The URL space of a site's own host, <name>.SITES_DOMAIN (apiary.sites)."""
 from django.urls import path
 
-from apiary import pages
+from apiary import sites
 
 urlpatterns = [
-    path("", pages.serve),
-    path("<path:path>", pages.serve),
+    path("", sites.serve),
+    path("<path:path>", sites.serve),
 ]

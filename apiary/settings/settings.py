@@ -28,7 +28,7 @@ CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
-# Static sites (apiary.pages) are untrusted HTML, so each is served on its own
+# Static sites (apiary.sites) are untrusted HTML, so each is served on its own
 # host, <name>.SITES_DOMAIN, never the app's. Empty disables them.
 SITES_DOMAIN = env("SITES_DOMAIN", default="")
 SITES_URL = env("SITES_URL", default="https://{name}.%s/" % SITES_DOMAIN)
@@ -75,8 +75,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    # First, so every later middleware sees the pages host's own URLconf.
-    "apiary.pages.PagesHostMiddleware",
+    # First, so every later middleware sees a site host's own URLconf.
+    "apiary.sites.SiteHostMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

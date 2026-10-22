@@ -129,7 +129,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.groups.filter(name='bom-viewer').exists() or request.user.is_superuser,
                     },
                     {
-                        "title": "Pages",
+                        "title": "Sites",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/?project__exact=bom",
                         "permission": lambda request: request.user.is_superuser,
@@ -160,7 +160,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.groups.filter(name='connthreads-viewer').exists() or request.user.is_superuser,
                     },
                     {
-                        "title": "Pages",
+                        "title": "Sites",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/?project__exact=connthreads",
                         "permission": lambda request: request.user.is_superuser,
@@ -191,7 +191,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.groups.filter(name='mappingviolence-viewer').exists() or request.user.is_superuser,
                     },
                     {
-                        "title": "Pages",
+                        "title": "Sites",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/?project__exact=mappingviolence",
                         "permission": lambda request: request.user.is_superuser,
@@ -228,7 +228,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.groups.filter(name='relec-viewer').exists() or request.user.is_superuser,
                     },
                     {
-                        "title": "Pages",
+                        "title": "Sites",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/?project__exact=relec",
                         "permission": lambda request: request.user.is_superuser,
@@ -265,7 +265,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.groups.filter(name='pinkertons-viewer').exists() or request.user.is_superuser,
                     },
                     {
-                        "title": "Pages",
+                        "title": "Sites",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/?project__exact=pinkertons",
                         "permission": lambda request: request.user.is_superuser,
@@ -320,7 +320,7 @@ UNFOLD = {
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
-                        "title": "Pages (all projects)",
+                        "title": "Sites (all projects)",
                         "icon": "web",
                         "link": lambda request: "/admin/apiary/site/",
                         "permission": lambda request: request.user.is_superuser,

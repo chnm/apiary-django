@@ -130,7 +130,7 @@ class DataSnapshot(BaseModel):
         ("manual", "Manual"),
         ("pre-restore", "Before a restore"),
         ("pre-reset", "Before a reset"),
-        ("page", "Page publish"),
+        ("site", "Site publish"),
         ("imported", "Imported"),
     ]
 
@@ -198,7 +198,7 @@ class Site(BaseModel):
 
 class SiteVersion(BaseModel):
     """
-    One immutable set of a site's files, under pages/<project>/<site key>/v<number>/.
+    One immutable set of a site's files, under sites/<project>/<site key>/v<number>/.
     The newest unpublished version is the draft that tools write into.
     """
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name="versions")
@@ -222,5 +222,5 @@ class SiteVersion(BaseModel):
 
     @property
     def prefix(self):
-        return f"pages/{self.site.project}/{self.site.key}/v{self.number}/"
+        return f"sites/{self.site.project}/{self.site.key}/v{self.number}/"
 

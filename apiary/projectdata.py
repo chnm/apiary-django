@@ -105,7 +105,7 @@ def take_snapshot(project, *, kind, user=None, label="", during=None):
     """
     Snapshot the project and return its DataSnapshot. during(alias), if
     given, runs inside the same consistent read, so whatever it reads (e.g.
-    a page's datasets) matches the snapshot exactly; its result is returned
+    a site's datasets) matches the snapshot exactly; its result is returned
     as the second value.
     """
     from apiary.models import DataSnapshot
@@ -188,7 +188,7 @@ def restore_snapshot(snapshot, *, user=None):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-AUTOMATIC = ("pre-restore", "pre-reset", "page")  # never "manual" or "imported"
+AUTOMATIC = ("pre-restore", "pre-reset", "site")  # never "manual" or "imported"
 
 
 def delete_snapshot(snapshot):

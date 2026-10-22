@@ -198,7 +198,7 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 - Read tools: `list_projects`, `query_records`, `get_record`, `aggregate`,
   `list_datasets`, `list_sites`. Field paths are checked against the model's
   own project, so filters cannot reach auth tables or another project.
-- Site tools (staff only, see Pages): `create_site`, `put_files`,
+- Site tools (staff only, see Sites): `create_site`, `put_files`,
   `delete_files`, `attach_dataset`, `publish_site`, `rollback_site`,
   `unpublish_site`. Errors are `ToolError`s, so the agent sees why.
 - ORM calls run on asgiref's single sync thread and close their connections:
@@ -232,11 +232,12 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   version was built from. Future live schema changes should snapshot through
   this.
 
-### Pages
+### Sites
 
-Static sites (`apiary/pages.py`) are each served on their own host,
+A *site* is a static website (`Site`, `SiteVersion`); a *page* is one HTML
+file in it. Sites (`apiary/sites.py`) are each served on their own host,
 `<name>.SITES_DOMAIN` (`<name>.sites.rrchnm.org`; `<name>.sites.localhost:8000`
-in Compose), never the app's: `PagesHostMiddleware` gives those hosts their own
+in Compose), never the app's: `SiteHostMiddleware` gives those hosts their own
 URLconf (`apiary/sites_urls.py`), so neither the app nor another site shares
 their origin. Site names are therefore unique across projects, DNS labels, and
 not reserved (`check_new_site`, used by MCP and the admin alike). Pages are
@@ -244,14 +245,15 @@ untrusted HTML, so they get the ADR 0050 headers for agent-written pages plus
 jsDelivr/cdnjs for scripts: the CSP sandbox gives them an opaque origin with no
 cookies.
 
-- Files live in private storage under `pages/<project>/<site key>/v<n>/`.
+- Files live in private storage under `sites/<project>/<site key>/v<n>/`.
   Tools write into the draft version; published versions never change, and
   rolling back points the site at an earlier one.
 - `attach_dataset` freezes a Ninja dataset into the site as JSON. Publishing
   reads every dataset with the publisher's permissions inside one snapshot
-  (`DataSnapshot` kind `page`), so a page records exactly the data it shows.
+  (`DataSnapshot` kind `site`), so a site version records exactly the data it
+  shows.
 - Limits: 2 MB a file, 200 files and 20 MB a site, a fixed list of file types.
-- Admin > Pages (superusers; each project's sidebar section links its own):
+- Admin > Sites (superusers; each project's sidebar section links its own):
   create a site, upload a zip into its draft (put_files' checks; a single
   top folder is stripped), publish, roll back, unpublish (both confirm on
   POST), and delete with its files.

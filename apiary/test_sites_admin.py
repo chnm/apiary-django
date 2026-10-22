@@ -8,13 +8,13 @@ from django.core.files.storage import storages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
-from apiary import pages, projectdata
+from apiary import projectdata
 from apiary.models import DataSnapshot, Site
 from bom.models import MortalityBill
 
 SITES = "/admin/apiary/site/"
 SNAPSHOTS = "/admin/apiary/datasnapshot/"
-PAGES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/",
+SITES_SETTINGS = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/",
          "ALLOWED_HOSTS": ["testserver", ".sites.test"]}
 
 
@@ -26,8 +26,8 @@ def zipped(files):
     return SimpleUploadedFile("site.zip", buffer.getvalue(), content_type="application/zip")
 
 
-@override_settings(**PAGES)
-class PagesAdminTests(TestCase):
+@override_settings(**SITES_SETTINGS)
+class SiteAdminTests(TestCase):
     databases = "__all__"
 
     def setUp(self):

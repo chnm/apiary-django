@@ -6,7 +6,7 @@
     <div class="p-4">
         <p class="font-semibold">{{ snapshot }}{% if snapshot.label %}: {{ snapshot.label }}{% endif %}</p>
         <p>Taken {{ snapshot.created_at }}{% if snapshot.created_by %} by {{ snapshot.created_by }}{% endif %}</p>
-        {% if used_by != "-" %}<p>Page versions built from it: {{ used_by }}</p>{% endif %}
+        {% if used_by != "-" %}<p>Site versions built from it: {{ used_by }}</p>{% endif %}
     </div>
 
     <div class="border-base-200 border-t p-4 dark:border-base-800">

@@ -1,4 +1,4 @@
-# Static sites (apiary.pages), each on its own host <name>.sites.rrchnm.org,
+# Static sites (apiary.sites), each on its own host <name>.sites.rrchnm.org,
 # so sites share an origin neither with the app nor with each other. The app
 # serves them only for these hosts, with the sites-only URLconf. parentRefs are
 # copied from the app route (kustomization.yaml). Needs the wildcard SAN on

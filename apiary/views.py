@@ -73,7 +73,7 @@ ALLOWED_COMMANDS = {
         'name': 'Prune Data Snapshots',
         'description': (
             'Delete automatic snapshots (before resets and restores) past retention. Manual snapshots '
-            'and those pages were built from are kept. Preview first.'
+            'and those sites were built from are kept. Preview first.'
         ),
         'args': [
             {'name': 'mode', 'type': 'select', 'choices': ('preview', 'delete'), 'required': True},

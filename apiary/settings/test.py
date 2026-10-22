@@ -16,7 +16,7 @@ SILENCED_SYSTEM_CHECKS = [*SILENCED_SYSTEM_CHECKS, "models.W046"]
 # when a test renders the admin.
 STORAGES = {**STORAGES, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
 
-# Snapshots and pages write files: keep them out of the checkout.
+# Snapshots and sites write files: keep them out of the checkout.
 import tempfile as _tempfile
 
 _media = _tempfile.mkdtemp(prefix="apiary-test-media-")
