@@ -15,9 +15,9 @@ services:
       - DJANGO_LOG_LEVEL=DEBUG
       - DJANGO_SECRET_KEY=thisisnotasecretkey
       - DJANGO_ALLOWED_HOSTS=localhost
-      # Pages are served on their own host; *.localhost resolves to loopback.
-      - PAGES_HOST=pages.localhost
-      - PAGES_BASE_URL=http://pages.localhost:8000
+      # Each static site is served on its own host; *.localhost resolves to loopback.
+      - SITES_DOMAIN=sites.localhost
+      - SITES_URL=http://{name}.sites.localhost:8000/
       - DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost
       - DJANGO_SUPERUSER_EMAIL=PLACEHOLDER
       - DJANGO_SUPERUSER_USERNAME=PLACEHOLDER

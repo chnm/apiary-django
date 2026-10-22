@@ -1,5 +1,7 @@
 """
-Static sites on the pages host (settings.PAGES_HOST), at /<project>/<site>/.
+Static sites, each on its own host: <name>.SITES_DOMAIN (sites.rrchnm.org).
+Names are unique across projects; the former shared host (PAGES_HOST,
+/<project>/<site>/) redirects to them.
 
 Files live in private storage under each version's prefix. Tools write into
 the site's draft version; publishing captures its datasets alongside a data
@@ -9,7 +11,8 @@ the site at an earlier one.
 
 Pages are untrusted HTML, so they are served only on their own host, never
 the app's, and with the ADR 0050 headers for agent-written pages: the CSP
-sandbox gives every page an opaque origin, with no cookies and no storage.
+sandbox gives every page an opaque origin, with no cookies and no storage. A
+host per site also keeps sites apart from each other.
 """
 import hashlib
 import posixpath
@@ -43,7 +46,10 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_SITE_BYTES = 20 * 1024 * 1024
 MAX_FILES = 200
 PATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$")
-SITE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,49}$")
+# A DNS label: letters, digits and inner hyphens.
+SITE_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$")
+# Names a site would plausibly be confused with infrastructure under.
+RESERVED_NAMES = {"www", "api", "admin", "mail", "pages", "sites", "static", "media", "mcp", "app", "apiary"}
 # Scripts and styles may also come from the CDNs the artifacts use, so pages
 # can load D3 and friends; everything else stays on the pages host.
 CDNS = "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com"
@@ -53,12 +59,8 @@ class PagesError(Exception):
     pass
 
 
-def base_url():
-    return settings.PAGES_BASE_URL.rstrip("/")
-
-
 def site_url(site):
-    return f"{base_url()}/{site.project}/{site.name}/"
+    return settings.SITES_URL.format(name=site.name)
 
 
 def get_site(project, name):
@@ -70,15 +72,26 @@ def get_site(project, name):
         raise PagesError(f"No site {name!r} in {project}; create_site makes one.")
 
 
-def create_site(project, name, *, title="", user=None):
+def check_new_site(project, name):
+    """Every way of creating a site (MCP, the admin) goes through these checks."""
     from apiary.models import Site
 
     if project not in PROJECT_APPS:
         raise PagesError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
-    if not SITE_NAME.match(name):
-        raise PagesError("Site names are 1-50 lowercase letters, digits and hyphens, starting with a letter or digit.")
-    if Site.objects.filter(project=project, name=name).exists():
-        raise PagesError(f"{project} already has a site {name!r}.")
+    if not SITE_NAME.match(name or ""):
+        raise PagesError("Site names are 1-50 lowercase letters, digits and inner hyphens: "
+                         "they are the first part of the site's host name.")
+    if name in RESERVED_NAMES:
+        raise PagesError(f"{name!r} is reserved; choose another name.")
+    existing = Site.objects.filter(name=name).first()
+    if existing:
+        raise PagesError(f"The name {name!r} is taken (by {existing}): names are unique across projects.")
+
+
+def create_site(project, name, *, title="", user=None):
+    from apiary.models import Site
+
+    check_new_site(project, name)
     return Site.objects.create(project=project, name=name, title=title, created_by=user)
 
 
@@ -309,26 +322,27 @@ def headers(request, response):
 
 
 def index(request):
+    """The former shared host's front page: links to every live site."""
     from apiary.models import Site
 
     items = "".join(
-        f'<li><a href="{escape(site.project)}/{escape(site.name)}/">{escape(site.title or site.name)}</a>'
-        f" ({escape(site.project)})</li>"
+        f'<li><a href="{escape(site_url(site))}">{escape(site.title or site.name)}</a> ({escape(site.project)})</li>'
         for site in Site.objects.filter(live_version__isnull=False).order_by("project", "name")
     )
-    html = f"<!DOCTYPE html><html lang=en><title>Apiary pages</title><h1>Apiary pages</h1><ul>{items}</ul></html>"
+    html = f"<!DOCTYPE html><html lang=en><title>Apiary sites</title><h1>Apiary sites</h1><ul>{items}</ul></html>"
     return headers(request, HttpResponse(html))
 
 
-def serve(request, project, site, path=""):
+def serve(request, path=""):
+    """A file of the site named by the request's host."""
     from apiary.models import Site
 
-    found = Site.objects.filter(project=project, name=site).select_related("live_version").first()
-    if found is None or found.live_version is None:
+    site = Site.objects.filter(name=request.site_name).select_related("live_version").first()
+    if site is None or site.live_version is None:
         raise Http404
     if path == "" or path.endswith("/"):
         path += "index.html"
-    version = found.live_version
+    version = site.live_version
     item = version.files.get(path)
     if item is None:
         raise Http404
@@ -336,17 +350,34 @@ def serve(request, project, site, path=""):
     return headers(request, response)
 
 
-def redirect_to_site(request, project, site):
-    return HttpResponsePermanentRedirect(f"/{project}/{site}/")
+def redirect_old_url(request, project, site, path=""):
+    """/<project>/<site>/<path> on the former shared host moves to the site's own host."""
+    from apiary.models import Site
+
+    found = Site.objects.filter(project=project, name=site).first()
+    if found is None:
+        raise Http404
+    return HttpResponsePermanentRedirect(site_url(found) + path)
 
 
 class PagesHostMiddleware:
-    """Route the pages host to the pages URLs, and nothing else."""
+    """
+    Route a site's host to the site URLs and the former shared host to its
+    redirects; nothing else is reachable on either.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if settings.PAGES_HOST and request.get_host().split(":")[0] == settings.PAGES_HOST:
+        host = request.get_host().split(":")[0]
+        suffix = f".{settings.SITES_DOMAIN}"
+        # The bare domain too: ALLOWED_HOSTS' ".domain" admits it, and it must
+        # never reach the app's own URLs.
+        if settings.SITES_DOMAIN and (host == settings.SITES_DOMAIN or host.endswith(suffix)):
+            name = host[:-len(suffix)] if host.endswith(suffix) else ""
+            request.site_name = name if name and "." not in name else None
+            request.urlconf = "apiary.sites_urls"
+        elif settings.PAGES_HOST and host == settings.PAGES_HOST:
             request.urlconf = "apiary.pages_urls"
         return self.get_response(request)

@@ -313,16 +313,18 @@ class SiteForm(forms.ModelForm):
         fields = ['project', 'name', 'title']
         widgets = {'project': UnfoldAdminSelectWidget(choices=[(p, p) for p in PROJECT_APPS])}
 
-    def clean_name(self):
-        name = self.cleaned_data['name']
-        if not pages.SITE_NAME.match(name):
-            raise forms.ValidationError('1-50 lowercase letters, digits and hyphens, starting with a letter or digit.')
-        return name
+    def clean(self):
+        cleaned = super().clean()
+        if self.instance.pk is None:  # the same checks as MCP's create_site
+            try:
+                pages.check_new_site(cleaned.get('project'), cleaned.get('name'))
+            except pages.PagesError as error:
+                raise forms.ValidationError(str(error))
+        return cleaned
 
-    def clean_project(self):
-        if self.cleaned_data['project'] not in PROJECT_APPS:
-            raise forms.ValidationError('Unknown project.')
-        return self.cleaned_data['project']
+    def validate_unique(self):
+        # check_new_site reports a taken name, naming the site that has it.
+        pass
 
 
 class UploadForm(forms.Form):

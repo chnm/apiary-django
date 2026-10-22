@@ -1,6 +1,5 @@
-# Static sites (apiary.pages) on their own host: the app serves them only for
-# this Host, with the pages-only URLconf, so a page never shares the app's
-# origin. parentRefs are copied from the app route (kustomization.yaml). The
+# The former shared host for static sites: it now serves an index and
+# redirects /<project>/<site>/ to each site's own host (sites-route.yaml). parentRefs are copied from the app route (kustomization.yaml). The
 # name needs a SAN on the platform public-tls certificate and DNS to the edge
 # (rrchnm-systems/infra).
 apiVersion: gateway.networking.k8s.io/v1

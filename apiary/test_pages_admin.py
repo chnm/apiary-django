@@ -14,8 +14,8 @@ from bom.models import MortalityBill
 
 SITES = "/admin/apiary/site/"
 SNAPSHOTS = "/admin/apiary/datasnapshot/"
-PAGES = {"PAGES_HOST": "pages.test", "PAGES_BASE_URL": "https://pages.test",
-         "ALLOWED_HOSTS": ["testserver", "pages.test"]}
+PAGES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/",
+         "ALLOWED_HOSTS": ["testserver", ".sites.test"]}
 
 
 def zipped(files):
@@ -41,7 +41,10 @@ class PagesAdminTests(TestCase):
     def test_create_upload_publish_rollback_unpublish_delete(self):
         response, site = self.create()
         self.assertEqual((site.project, site.created_by), ("bom", self.root))
-        self.assertEqual(self.client.post(f"{SITES}add/", {"project": "bom", "name": "Bad Name"}).status_code, 200)
+        self.assertContains(self.client.post(f"{SITES}add/", {"project": "bom", "name": "Bad Name"}), "Site names are")
+        # The same checks as MCP: unique across projects, with the owner named.
+        self.assertContains(self.client.post(f"{SITES}add/", {"project": "relec", "name": "plague"}),
+                            "taken (by bom/plague)")
 
         upload = f"{SITES}{site.pk}/upload/"
         self.client.post(upload, {"archive": zipped({
@@ -70,7 +73,7 @@ class PagesAdminTests(TestCase):
         site.refresh_from_db()
         self.assertEqual(site.live_version.number, 1)
 
-        self.assertContains(self.client.get(f"{SITES}{site.pk}/unpublish/"), "Takes https://pages.test/bom/plague/")
+        self.assertContains(self.client.get(f"{SITES}{site.pk}/unpublish/"), "Takes https://plague.sites.test/")
         self.client.post(f"{SITES}{site.pk}/unpublish/")
         site.refresh_from_db()
         self.assertIsNone(site.live_version)
@@ -82,7 +85,7 @@ class PagesAdminTests(TestCase):
 
     def test_per_project_list_and_superusers_only(self):
         _, site = self.create()
-        Site.objects.create(project="relec", name="other")
+        Site.objects.create(project="relec", name="other")  # bypasses the checks; only the list is tested
         listing = self.client.get(f"{SITES}?project__exact=bom").content.decode()
         self.assertIn("bom/plague", listing)
         self.assertNotIn("relec/other", listing)

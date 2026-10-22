@@ -159,8 +159,8 @@ mcp = MCPServer(
     name="apiary",
     instructions=(
         "Read access to the Apiary digital humanities projects' data: call list_projects first "
-        "for each project's models and fields. Staff can also publish static sites to the pages "
-        "host: create_site, put_files (index.html required), attach_dataset to freeze a dataset "
+        "for each project's models and fields. Staff can also publish static sites, each on its "
+        "own host (<name>.sites.rrchnm.org): create_site, put_files (index.html required), attach_dataset to freeze a dataset "
         "into the site as JSON, then publish_site. Sites are versioned: rollback_site restores one."
     ),
     token_verifier=APITokenVerifier(),
@@ -301,7 +301,11 @@ async def list_sites(project: str | None = None) -> dict:
 
 @mcp.tool()
 async def create_site(project: str, name: str, title: str = "") -> dict:
-    """Create an empty static site at <pages host>/<project>/<name>/. Staff only."""
+    """
+    Create an empty static site for a project, served at <name>.sites.rrchnm.org.
+    Names are unique across projects: lowercase letters, digits and inner
+    hyphens. Staff only.
+    """
     def run(user):
         return pages.describe(pages.create_site(project, name, title=title, user=user))
     return await site_tool(run)()
@@ -393,7 +397,10 @@ def transport_security():
     wildcard there can't be expressed in the SDK's patterns; bearer auth
     still protects the endpoint.
     """
-    hosts = list(settings.ALLOWED_HOSTS)
+    # The site hosts never serve /mcp: leave them out, or their wildcard would
+    # switch the check off.
+    site_hosts = {f".{settings.SITES_DOMAIN}", settings.PAGES_HOST} - {"."}
+    hosts = [host for host in settings.ALLOWED_HOSTS if host not in site_hosts]
     if not hosts or any(host == "*" or host.startswith(".") for host in hosts):
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(

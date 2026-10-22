@@ -9,8 +9,8 @@ from apiary import pages
 from apiary.models import APIToken, DataSnapshot, Site
 from bom.models import MortalityBill
 
-PAGES = {"PAGES_HOST": "pages.test", "PAGES_BASE_URL": "https://pages.test",
-         "ALLOWED_HOSTS": ["testserver", "pages.test", "localhost"]}
+PAGES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/", "PAGES_HOST": "pages.test",
+         "ALLOWED_HOSTS": ["testserver", ".sites.test", "pages.test", "localhost"]}
 
 
 @override_settings(**PAGES)
@@ -22,7 +22,7 @@ class PagesTests(TestCase):
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
         self.site = pages.create_site("bom", "plague", title="Plague", user=self.staff)
 
-    def get(self, path, host="pages.test"):
+    def get(self, path, host="plague.sites.test"):
         return self.client.get(path, HTTP_HOST=host)
 
     def body(self, response):
@@ -38,36 +38,39 @@ class PagesTests(TestCase):
         snapshot = version.data_snapshot
         self.assertEqual((snapshot.kind, snapshot.row_counts), ("page", {"mortalitybill": 1}))
 
-        response = self.get("/bom/plague/")
+        response = self.get("/")
         self.assertEqual((response.status_code, self.body(response)), (200, b"<h1>Plague</h1>"))
         self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
         self.assertIn("sandbox allow-scripts", response["Content-Security-Policy"])
-        self.assertIn("connect-src http://pages.test;", response["Content-Security-Policy"])
+        self.assertIn("connect-src http://plague.sites.test;", response["Content-Security-Policy"])
         self.assertEqual(response["Access-Control-Allow-Origin"], "*")
-        data = json.loads(self.body(self.get("/bom/plague/data/deaths-by-year.json")))
+        data = json.loads(self.body(self.get("/data/deaths-by-year.json")))
         self.assertEqual(data, [{"year": 1665, "type": "Plague", "deaths": 10}])
 
         # Frozen: later changes to the data reach the page only on republishing.
         MortalityBill.objects.create(year=1666, type="Plague", count=5)
-        self.assertEqual(len(json.loads(self.body(self.get("/bom/plague/data/deaths-by-year.json")))), 1)
+        self.assertEqual(len(json.loads(self.body(self.get("/data/deaths-by-year.json")))), 1)
 
-        self.assertEqual(self.get("/bom/plague").status_code, 301)
-        self.assertIn(b"Plague", self.get("/").content)
+        # The former shared host redirects to the site's own host and lists it.
+        old = self.get("/bom/plague/data/deaths-by-year.json", host="pages.test")
+        self.assertEqual((old.status_code, old["Location"]), (301, "https://plague.sites.test/data/deaths-by-year.json"))
+        self.assertEqual(self.get("/bom/plague", host="pages.test")["Location"], "https://plague.sites.test/")
+        self.assertIn(b'href="https://plague.sites.test/"', self.get("/", host="pages.test").content)
 
     def test_versions_and_rollback(self):
         pages.put_files(self.site, {"index.html": b"one"}, user=self.staff)
         pages.publish(self.site, user=self.staff)
         pages.put_files(self.site, {"index.html": b"two", "extra.txt": b"x"}, user=self.staff)
-        self.assertEqual(self.body(self.get("/bom/plague/")), b"one")  # drafts are not served
+        self.assertEqual(self.body(self.get("/")), b"one")  # drafts are not served
         pages.publish(self.site, user=self.staff)
-        self.assertEqual(self.body(self.get("/bom/plague/")), b"two")
+        self.assertEqual(self.body(self.get("/")), b"two")
 
         pages.rollback(self.site, 1)
-        self.assertEqual(self.body(self.get("/bom/plague/")), b"one")
-        self.assertEqual(self.get("/bom/plague/extra.txt").status_code, 404)
+        self.assertEqual(self.body(self.get("/")), b"one")
+        self.assertEqual(self.get("/extra.txt").status_code, 404)
 
         pages.unpublish(self.site)
-        self.assertEqual(self.get("/bom/plague/").status_code, 404)
+        self.assertEqual(self.get("/").status_code, 404)
         with self.assertRaisesMessage(pages.PagesError, "no published version 7"):
             pages.rollback(self.site, 7)
 
@@ -77,13 +80,21 @@ class PagesTests(TestCase):
         pages.delete_files(self.site, ["a.css"], user=self.staff)
         version = pages.publish(self.site, user=self.staff)
         self.assertEqual((version.number, sorted(version.files)), (2, ["index.html"]))
-        self.assertEqual(self.body(self.get("/bom/plague/")), b"one")
+        self.assertEqual(self.body(self.get("/")), b"one")
 
     def test_hosts_are_kept_apart(self):
         pages.put_files(self.site, {"index.html": b"page"}, user=self.staff)
         pages.publish(self.site, user=self.staff)
-        self.assertEqual(self.get("/admin/login/").status_code, 404)
-        self.assertEqual(self.get("/bom/plague/", host="testserver").status_code, 404)
+        other = pages.create_site("relec", "families", user=self.staff)
+        pages.put_files(other, {"index.html": b"families"}, user=self.staff)
+        pages.publish(other, user=self.staff)
+
+        self.assertEqual(self.body(self.get("/", host="families.sites.test")), b"families")
+        for host in ("plague.sites.test", "sites.test", "a.b.sites.test", "nope.sites.test", "pages.test"):
+            self.assertEqual(self.get("/admin/login/", host=host).status_code, 404, host)
+        for host in ("sites.test", "a.b.sites.test", "nope.sites.test"):
+            self.assertEqual(self.get("/", host=host).status_code, 404, host)
+        self.assertEqual(self.get("/admin/login/", host="testserver").status_code, 200)  # the app's own host
 
     def test_rejects_bad_files(self):
         for files, message in [
@@ -98,10 +109,13 @@ class PagesTests(TestCase):
             pages.publish(self.site, user=self.staff)
         with self.assertRaisesMessage(pages.PagesError, "No dataset 'nope'"):
             pages.attach_dataset(self.site, "nope", user=self.staff)
-        with self.assertRaisesMessage(pages.PagesError, "already has a site"):
-            pages.create_site("bom", "plague")
-        with self.assertRaisesMessage(pages.PagesError, "Site names"):
-            pages.create_site("bom", "Bad Name")
+        with self.assertRaisesMessage(pages.PagesError, "taken (by bom/plague): names are unique across projects"):
+            pages.create_site("relec", "plague")
+        for name in ("Bad Name", "-edge", "edge-", "a.b", "x" * 51):
+            with self.assertRaisesMessage(pages.PagesError, "Site names are"):
+                pages.create_site("bom", name)
+        with self.assertRaisesMessage(pages.PagesError, "'www' is reserved"):
+            pages.create_site("bom", "www")
 
     def test_datasets_use_the_publishers_permissions(self):
         outsider = User.objects.create_user("outsider", is_staff=True)
@@ -151,7 +165,7 @@ class PagesToolTests(TransactionTestCase):
         self.assertFalse(self.call(staff, "attach_dataset", project="bom", site="plague", dataset="deaths-by-year")[0])
         error, published = self.call(staff, "publish_site", project="bom", site="plague")
         self.assertFalse(error, published)
-        self.assertEqual(published["url"], "https://pages.test/bom/plague/")
+        self.assertEqual(published["url"], "https://plague.sites.test/")
         self.assertEqual(DataSnapshot.objects.get().pk, published["data_snapshot"])
 
         error, sites = self.call(staff, "list_sites", project="bom")
