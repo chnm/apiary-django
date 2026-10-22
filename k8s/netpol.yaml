@@ -7,9 +7,11 @@ metadata:
   name: external-services
   annotations: { argocd.argoproj.io/sync-wave: "-2" }
 spec:
+  # The migrate Job too: data migrations can touch object storage (0006 moves
+  # site files), and without this egress they hang until the Job's deadline.
   endpointSelector:
-    matchLabels:
-      k8s:app: app
+    matchExpressions:
+      - { key: "k8s:app", operator: In, values: [app, migrate] }
   egress:
     # Garage S3 API nodes (obj.rrchnm.internal); plaintext on the internal LAN.
     - toCIDRSet:
