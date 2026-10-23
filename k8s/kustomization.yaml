@@ -335,6 +335,11 @@ replacements:
     select:
       kind: HTTPRoute
       name: mcp
+  - fieldPaths:
+    - spec.hostnames
+    select:
+      kind: HTTPRoute
+      name: mcp-oauth
 - source:
     fieldPath: spec.parentRefs
     kind: HTTPRoute
@@ -345,6 +350,11 @@ replacements:
     select:
       kind: HTTPRoute
       name: mcp
+  - fieldPaths:
+    - spec.parentRefs
+    select:
+      kind: HTTPRoute
+      name: mcp-oauth
   - fieldPaths:
     - spec.parentRefs
     select:
