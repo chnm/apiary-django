@@ -11,6 +11,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import path
 from django.utils.html import format_html
+from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -29,7 +30,7 @@ from unfold.widgets import (
     UnfoldAdminTextInputWidget,
 )
 
-from . import changes, mcp_oauth, projectdata, sites
+from . import changes, diffview, mcp_oauth, projectdata, sites
 from .projects import PROJECT_APPS, has_role, project_alias, project_models
 from .models import APIToken, Change, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
 
@@ -641,8 +642,8 @@ class ChangeAdmin(SuperuserOnly, ModelAdmin):
     list_display = ['id', 'project', 'kind', 'status', 'summary', 'proposed_by', 'proposed_via', 'proposed_at', 'decided_at']
     list_filter = ['project', 'kind', 'status']
     search_fields = ['summary', 'reason']
-    readonly_fields = ['project', 'kind', 'status', 'summary', 'reason', 'operations_json', 'effects', 'sql',
-                       'sample', 'proposed_by', 'proposed_via', 'proposed_at', 'expires_at', 'decided_by',
+    readonly_fields = ['project', 'kind', 'status', 'summary', 'reason', 'rows_view', 'effects', 'sql',
+                       'operations_json', 'proposed_by', 'proposed_via', 'proposed_at', 'expires_at', 'decided_by',
                        'decided_via', 'decided_at', 'schema_version', 'snapshot', 'reverts', 'error']
     fields = readonly_fields
     actions_detail = ['apply_change', 'reject_change', 'revert_change']
@@ -669,10 +670,12 @@ class ChangeAdmin(SuperuserOnly, ModelAdmin):
         statements = obj.preview.get('sql')
         return format_html('<pre class="whitespace-pre-wrap text-xs">{}</pre>', ';\n'.join(statements)) if statements else '-'
 
-    @admin.display(description='Rows (sample)')
-    def sample(self, obj):
-        rows = obj.preview.get('sample') or obj.after[:5]
-        return self.pretty(rows) if rows else '-'
+    @admin.display(description='Rows')
+    def rows_view(self, obj):
+        found = changes.diff(obj)
+        if found is None:
+            return '-'
+        return render_to_string('admin/apiary/change_diff.html', {'diff': diffview.readable(obj, found)})
 
     def decide(self, request, object_id, verb, run):
         change = self.get_object(request, object_id)

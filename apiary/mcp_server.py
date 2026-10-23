@@ -513,7 +513,7 @@ async def list_changes(project: str | None = None, status: str | None = None, li
             found = found.filter(project=project)
         if status:
             found = found.filter(status=status)
-        return {"changes": [changes.describe(change) for change in found[:min(max(limit, 1), 100)]]}
+        return {"changes": [changes.describe(change, diff_rows=0) for change in found[:min(max(limit, 1), 100)]]}
     return await tool("mcp:read", run)()
 
 

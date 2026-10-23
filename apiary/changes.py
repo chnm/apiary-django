@@ -15,6 +15,7 @@ Roles (apiary.projects): editors create and update records; admins delete
 records and change tables.
 """
 import json
+import re
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -282,8 +283,118 @@ def reject(change, user, *, via):
     return decided(change, "rejected", user=user, via=via)
 
 
-def describe(change):
-    """A change as an agent or API sees it."""
+DIFF_ROWS = 50
+DIFF_VALUES = 10
+REVERSED = {"create": "delete", "delete": "create", "update": "update"}
+
+
+def row_pairs(change):
+    """
+    A records change as (action, table, [(before row, after row)]): None for a
+    row that does not exist on that side. Proposals, and changes that never
+    applied, pair each row with what applying would make it; a revert is its
+    change's rows the other way round.
+    """
+    if not change.operations:
+        return None
+    operation = change.operations[0]
+    action, before, after = operation["op"], change.before, change.after
+    if action == "revert":
+        original = change.reverts
+        if original is None:
+            return None
+        action, before, after = REVERSED[original.operations[0]["op"]], original.after, original.before
+    if action == "create":
+        return action, operation["table"], [(None, r) for r in after or [{"id": None, **values} for values in operation.get("rows", [])]]
+    if action == "delete":
+        return action, operation["table"], [(r, None) for r in before]
+    after_by_id = {r["id"]: r for r in after}
+    values = operation.get("values", {})
+    return action, operation["table"], [(r, after_by_id.get(r["id"]) or {**r, **values}) for r in before]
+
+
+DATE_OR_TIME = re.compile(r"\d{2}:\d{2}(:\d{2})?|\d{4}-\d{2}-\d{2}([T ].*)?")
+
+
+def operation_of(change):
+    return change.operations[0]["op"] if change.operations else None
+
+
+def wordy(value):
+    return isinstance(value, str) and value.strip() and not DATE_OR_TIME.fullmatch(value.strip())
+
+
+def naming_columns(rows, columns):
+    """Text columns to name rows by, the ones that best tell these rows apart first."""
+    texts = [c for c in columns if any(wordy(r.get(c)) for r in rows)]
+    return sorted(texts, key=lambda c: -len({r.get(c) for r in rows if wordy(r.get(c))}))
+
+
+def label(row, changed, columns):
+    """A few words naming a row, from the first of columns it has text in, preferring one the change left alone."""
+    texts = [(name in changed, row[name].strip()) for name in columns if wordy(row.get(name))]
+    for _, value in sorted(texts, key=lambda text: text[0]):
+        return value if len(value) <= 60 else value[:59] + "…"
+    return ""
+
+
+def diff(change, rows=DIFF_ROWS):
+    """
+    A records change side by side, for people and agents: each changed
+    column's moves from one value to another with how many rows made each
+    (short however many rows changed), then the first `rows` rows, each
+    column before and after. None for table changes.
+    """
+    if change.kind != "records" or not (paired := row_pairs(change)):
+        return None
+    action, table, pairs = paired
+    first = next(r for pair in pairs[:1] for r in pair if r is not None) if pairs else {}
+    # In the table's own order: rows come back from jsonb with their keys reordered.
+    model = project_models(change.project).get(table)
+    order = [f.name for f in model._meta.concrete_fields if not f.primary_key] if model else []
+    columns = sorted((name for name in first if name != "id"), key=lambda name: (name not in order, order.index(name) if name in order else 0))
+    naming = naming_columns([before or after for before, after in pairs[:rows]], columns)
+    moves, items = {}, []
+    for number, (before, after) in enumerate(pairs):
+        changed = [c for c in columns if (before or {}).get(c) != (after or {}).get(c)] if action == "update" else columns
+        for column in changed if action == "update" else ():
+            key = (column, json.dumps(before.get(column)), json.dumps(after.get(column)))
+            moves[key] = moves.get(key, 0) + 1
+        if number < rows:
+            shown = before if after is None else after
+            items.append({
+                "id": shown.get("id"), "label": label(before or after, changed, naming),
+                "fields": [{"column": c, "before": (before or {}).get(c), "after": (after or {}).get(c), "changed": c in changed}
+                           for c in columns],
+            })
+    summary = []
+    for column in columns:
+        found = sorted(((count, b, a) for (c, b, a), count in moves.items() if c == column), key=lambda m: -m[0])
+        summary += [{"column": column, "before": json.loads(b), "after": json.loads(a), "rows": count}
+                    for count, b, a in found[:DIFF_VALUES]]
+        if len(found) > DIFF_VALUES:
+            summary.append({"column": column, "other": len(found) - DIFF_VALUES,
+                            "rows": sum(count for count, _, _ in found[DIFF_VALUES:])})
+    return {
+        "table": table, "action": action, "rows": len(pairs), "summary": summary,
+        "items": items, "more_rows": max(len(pairs) - rows, 0),
+        "applied": change.status in ("applied", "reverted"),
+        "undoes": change.reverts_id if operation_of(change) == "revert" else None,
+    }
+
+
+def compact_diff(change, rows):
+    """diff() for an agent: each row's changed columns only, as [before, after]."""
+    found = diff(change, rows=rows)
+    if found is None:
+        return None
+    for item in found["items"]:
+        item["changes"] = {f["column"]: [f["before"], f["after"]] for f in item.pop("fields") if f["changed"]}
+    return found
+
+
+def describe(change, diff_rows=10):
+    """A change as an agent or API sees it, with diff_rows of its rows side by side (0: only the summary)."""
     return {
         "id": change.pk, "project": change.project, "kind": change.kind, "status": change.status,
         "summary": change.summary, "reason": change.reason, "operations": change.operations,
@@ -295,6 +406,7 @@ def describe(change):
         "decided_at": change.decided_at.isoformat() if change.decided_at else None,
         "snapshot": change.snapshot_id, "schema_version": change.schema_version, "error": change.error or None,
         "rows_after": len(change.after) if change.kind == "records" else None,
+        "diff": compact_diff(change, diff_rows),
     }
 
 
