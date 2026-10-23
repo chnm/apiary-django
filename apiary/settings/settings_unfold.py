@@ -3,9 +3,30 @@ Django Unfold admin interface settings.
 
 Documentation: https://github.com/unfoldadmin/django-unfold
 """
+from urllib.parse import parse_qs
+
 from django.urls import reverse_lazy
 
 from .settings import *
+
+TABLES_PATH = "/admin/apiary/change/tables/"
+
+
+def listed(path, project=None):
+    """
+    Active on path's list and object pages for this project only (None: unfiltered).
+    Unfold matches a link by path alone, so every project's filtered link to
+    the same list would light up, and open its section, at once.
+    """
+    def active(request):
+        if not request.path.startswith(path) or request.path.startswith(TABLES_PATH):
+            return False
+        current = request.GET.get("project__exact")
+        if current is None:  # an object page keeps the list's filter here
+            current = (parse_qs(request.GET.get("_changelist_filters", "")).get("project__exact") or [None])[0]
+        return current == project
+    return active
+
 
 # Each project's sidebar section: its tables (the live tables page; demo's
 # code models nest under Data Models, Unfold's collapsible list that opens on
@@ -20,7 +41,7 @@ def project_section(title, label, models=()):
     def superuser(request):
         return request.user.is_superuser
 
-    items = [{"title": "Tables", "icon": "table_view", "link": f"/admin/apiary/change/tables/{label}/", "permission": member}]
+    items = [{"title": "Tables", "icon": "table_view", "link": f"{TABLES_PATH}{label}/", "permission": member}]
     if models:
         items.append({
             "title": "Data Models",
@@ -34,10 +55,11 @@ def project_section(title, label, models=()):
         })
     items += [
         {"title": "Changes", "icon": "history", "link": f"/admin/apiary/change/?project__exact={label}",
-         "permission": superuser},
-        {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}", "permission": superuser},
-        {"title": "Data Snapshots", "icon": "backup",
-         "link": f"/admin/apiary/datasnapshot/?project__exact={label}", "permission": superuser},
+         "active": listed("/admin/apiary/change/", label), "permission": superuser},
+        {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}",
+         "active": listed("/admin/apiary/site/", label), "permission": superuser},
+        {"title": "Data Snapshots", "icon": "backup", "link": f"/admin/apiary/datasnapshot/?project__exact={label}",
+         "active": listed("/admin/apiary/datasnapshot/", label), "permission": superuser},
     ]
     return {"title": title, "separator": True, "collapsible": True, "items": items}
 
@@ -200,12 +222,14 @@ UNFOLD = {
                         "title": "Data Snapshots (all projects)",
                         "icon": "backup",
                         "link": "/admin/apiary/datasnapshot/",
+                        "active": listed("/admin/apiary/datasnapshot/"),
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Sites (all projects)",
                         "icon": "web",
                         "link": "/admin/apiary/site/",
+                        "active": listed("/admin/apiary/site/"),
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
@@ -230,6 +254,7 @@ UNFOLD = {
                         "title": "Changes",
                         "icon": "history",
                         "link": "/admin/apiary/change/",
+                        "active": listed("/admin/apiary/change/"),
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {
