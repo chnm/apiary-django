@@ -435,8 +435,10 @@ class SiteVersionInline(admin.TabularInline):
 
     @admin.display(description='Files')
     def file_list(self, obj):
+        if not obj.files:
+            return '-'
         return format_html('<br>'.join(['{} ({} B)'] * len(obj.files)),
-                           *[part for path, item in sorted(obj.files.items()) for part in (path, item['size'])]) or '-'
+                           *[part for path, item in sorted(obj.files.items()) for part in (path, item['size'])])
 
     @admin.display(description='Data snapshot')
     def snapshot(self, obj):
@@ -659,7 +661,8 @@ class ChangeAdmin(SuperuserOnly, ModelAdmin):
 
     @admin.display(description='Effects')
     def effects(self, obj):
-        return format_html('<br>'.join(['{}'] * len(obj.preview.get('effects', []))), *obj.preview.get('effects', [])) or '-'
+        effects = obj.preview.get('effects') or []
+        return format_html('<br>'.join(['{}'] * len(effects)), *effects) if effects else '-'
 
     @admin.display(description='SQL')
     def sql(self, obj):

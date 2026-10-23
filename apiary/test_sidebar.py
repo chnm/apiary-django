@@ -44,3 +44,29 @@ class SidebarTests(TestCase):
         page = self.client.get("/admin/auth/user/").content.decode()
         anchor = re.search(r'<a href="/admin/auth/user/"[^>]*>', page).group(0)
         self.assertIn("active", anchor)
+
+
+class FilteredLinkTests(TestCase):
+    """Each project's Changes, Sites and Snapshots link the same list, filtered: only the shown project's lights up."""
+    databases = "__all__"
+
+    def active(self, url):
+        import re
+
+        self.client.force_login(User.objects.get_or_create(username="root", defaults={"is_superuser": True, "is_staff": True})[0])
+        page = self.client.get(url).content.decode()
+        return {href for href, rest in re.findall(r'<a href="(/admin/apiary/(?:change|site|datasnapshot)/[^"]*)"([^>]*)>', page)
+                if "active" in rest}
+
+    def test_only_the_filtered_projects_link_is_active(self):
+        self.assertEqual(self.active("/admin/apiary/change/?project__exact=bom"), {"/admin/apiary/change/?project__exact=bom"})
+        self.assertEqual(self.active("/admin/apiary/site/?project__exact=relec"), {"/admin/apiary/site/?project__exact=relec"})
+        self.assertEqual(self.active("/admin/apiary/datasnapshot/"), {"/admin/apiary/datasnapshot/"})
+        self.assertEqual(self.active("/admin/apiary/change/tables/bom/"), {"/admin/apiary/change/tables/bom/"})
+
+    def test_an_object_page_keeps_its_lists_project(self):
+        from apiary.models import Change
+
+        change = Change.objects.create(project="bom", kind="records", summary="x")
+        url = f"/admin/apiary/change/{change.pk}/change/?_changelist_filters=project__exact%3Dbom"
+        self.assertEqual(self.active(url), {"/admin/apiary/change/?project__exact=bom"})
