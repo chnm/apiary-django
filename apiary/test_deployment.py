@@ -23,24 +23,26 @@ class DeploymentTests(SimpleTestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"status": "database unavailable"})
 
-    def test_migrations_create_schemas_and_cover_every_alias_without_loading_fixtures(self):
+    def test_migrations_create_schemas_cover_every_alias_and_seed_only_the_demo(self):
         database = MagicMock()
         with patch("apiary.management.commands.migrate_projects.connections", {"default": database}), patch(
             "apiary.management.commands.migrate_projects.call_command"
-        ) as migrate:
+        ) as migrate, patch("apiary.management.commands.migrate_projects.code_models", return_value={}):
             call_command("migrate_projects")
         statements = database.cursor.return_value.__enter__.return_value.execute.call_args_list
         self.assertEqual([call.args[0] for call in statements], [
             f'CREATE SCHEMA IF NOT EXISTS "{app}"'
-            for app in ("bom", "connthreads", "mappingviolence", "relec")
+            for app in ("demo", "connthreads", "mappingviolence", "relec")
         ])
         migrations = [call for call in migrate.call_args_list if call.args[0] == "migrate"]
-        self.assertEqual([call.kwargs["database"] for call in migrations], [
-            "default", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db",
+        projects = ("demo", "bom", "connthreads", "mappingviolence", "relec", "pinkertons")
+        self.assertEqual([(call.args[1:], call.kwargs["database"]) for call in migrations], [
+            ((), "default"), *[pair for app in projects for pair in (((app,), f"{app}_db"), (("live",), f"{app}_db"))],
         ])
-        # Then the project rows and their groups, from code: never loaddata.
-        self.assertEqual([call.args[0] for call in migrate.call_args_list[len(migrations):]],
-                         ["sync_projects", "init_project_groups"])
+        # Then the project rows and their groups, from code, and demo's mock data into an empty demo.
+        rest = migrate.call_args_list[len(migrations):]
+        self.assertEqual([call.args[0] for call in rest], ["sync_projects", "init_project_groups", "loaddata"])
+        self.assertEqual((rest[2].args[1].rsplit("/", 2)[-2:], rest[2].kwargs["database"]), (["fixtures", "demo.json"], "demo_db"))
 
     def test_workflow_uses_pinned_github_k0s_reusable(self):
         from pathlib import Path
@@ -100,7 +102,7 @@ import django
 django.setup()
 from django.conf import settings
 pg = [a for a, d in settings.DATABASES.items() if d["ENGINE"] == "django.db.backends.postgresql"]
-assert len(pg) == 4, pg
+assert len(pg) == 5, pg
 for alias in pg:
     options = settings.DATABASES[alias]["OPTIONS"]["options"]
     assert options.startswith("-c search_path="), options
@@ -181,7 +183,7 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
 
         zoneinfo.ZoneInfo(settings.TIME_ZONE)
 
-    def test_root_page_shows_each_project_three_ways_to_anyone(self):
+    def test_root_page_shows_only_the_demo_project_to_anyone(self):
         from django.contrib.auth.models import AnonymousUser
         from django.db.models.query import QuerySet
         from django.test import RequestFactory
@@ -195,24 +197,20 @@ assert "OPTIONS" not in settings.DATABASES["bom_db"] or "lock_timeout" not in st
         request = RequestFactory().get("/")
         request.user = AnonymousUser()
 
-        # Test settings make every alias SQLite; name each backend after its alias instead.
-        backends = {f"{label}_db": MagicMock(display_name=f"{label}-engine") for label in views.PROJECT_APPS}
+        # Test settings make every alias SQLite; name the backend after its alias instead.
+        backends = {"demo_db": MagicMock(display_name="demo-engine")}
         with patch.object(QuerySet, "_fetch_all", fetch), patch.object(QuerySet, "count", return_value=101), \
                 patch("apiary.views.connections", backends):
             response = views.project_tables_page(request)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        for name in ("Death by Numbers", "Connecting Threads", "Mapping Violence", "Religious Ecologies", "Pinkertons"):
-            self.assertIn(name, html)
-        for label in views.PROJECT_APPS:
-            self.assertIn(f"Database: {label}-engine (<code>{label}_db</code>)", html)
-            self.assertIn(f'data-drf="/api/{label}/v1/', html)
-            self.assertIn(f'data-chart="/api/{label}/v1/datasets/', html)
-        for table in ("mortalitybill", "textile", "witness", "denomination", "schedule", "activity", "location"):
+        self.assertIn("Database: demo-engine (<code>demo_db</code>)", html)
+        self.assertIn('data-drf="/api/demo/v1/mortalitybill/"', html)
+        for table in ("mortalitybill", "activity", "location"):
             self.assertIn(f"<code>{table}</code>", html)
         self.assertIn("First 100 of 101 rows.", html)
-        self.assertIn('src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-', html)
-        self.assertNotIn("<style", html)
+        for other in ("Death by Numbers", "Religious Ecologies", "bom_db", "datasets", "d3"):
+            self.assertNotIn(other, html)
 
     def test_debug_toolbar_keeps_profiling_panel_off_by_default(self):
         # Threaded runserver and gthread workers run requests concurrently, and

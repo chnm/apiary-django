@@ -22,11 +22,16 @@ from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationFo
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
 from unfold.enums import ActionVariant
-from unfold.widgets import UnfoldAdminFileFieldWidget, UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget
+from unfold.widgets import (
+    UnfoldAdminCheckboxSelectMultipleWidget,
+    UnfoldAdminFileFieldWidget,
+    UnfoldAdminSelectWidget,
+    UnfoldAdminTextInputWidget,
+)
 
-from . import projectdata, sites
-from .views import PROJECT_APPS
-from .models import APIToken, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
+from . import changes, mcp_oauth, projectdata, sites
+from .projects import PROJECT_APPS, has_role, project_alias, project_models
+from .models import APIToken, Change, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
 
 
 admin.site.unregister(User)
@@ -52,26 +57,46 @@ class ProjectAdmin(ModelAdmin):
     list_filter = ['app_label']
 
 
+class APITokenForm(forms.ModelForm):
+    scopes = forms.MultipleChoiceField(
+        choices=[(name, f"{text} ({name})") for name, text in mcp_oauth.SCOPES.items()],
+        initial=["mcp:read"], widget=UnfoldAdminCheckboxSelectMultipleWidget,
+        help_text="mcp:read is always included.")
+
+    class Meta:
+        model = APIToken
+        fields = ['user', 'name', 'expires_at', 'scopes']
+
+    def clean_scopes(self):
+        return mcp_oauth.granted_scopes(self.cleaned_data['scopes'])
+
+
 @admin.register(APIToken)
 class APITokenAdmin(ModelAdmin):
     """
     Superusers create and revoke tokens for any user. A token acts as its
     user, so issuing one is as sensitive as setting their password.
     """
-    list_display = ['name', 'user', 'hint', 'status', 'created_at', 'expires_at', 'last_used_at']
+    list_display = ['name', 'user', 'hint', 'status', 'scopes', 'created_at', 'expires_at', 'last_used_at']
     list_filter = ['user']
     search_fields = ['name', 'hint', 'user__username']
     actions = ['revoke']
+    add_form = APITokenForm
+
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is None:
+            kwargs['form'] = self.add_form
+        return super().get_form(request, obj, **kwargs)
 
     def get_fields(self, request, obj=None):
         if obj is None:
-            return ['user', 'name', 'expires_at']
-        return ['user', 'name', 'hint', 'created_at', 'expires_at', 'last_used_at', 'revoked_at']
+            return ['user', 'name', 'expires_at', 'scopes']
+        return ['user', 'name', 'hint', 'scopes', 'created_at', 'expires_at', 'last_used_at', 'revoked_at']
 
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return []
-        return ['user', 'hint', 'created_at', 'last_used_at', 'revoked_at']
+        return ['user', 'hint', 'scopes', 'created_at', 'last_used_at', 'revoked_at']
 
     @admin.display(description='Status')
     def status(self, obj):
@@ -198,7 +223,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     list_filter = ['project', 'kind', 'created_at']
     search_fields = ['label']
     readonly_fields = ['key', 'project', 'kind', 'label', 'created_at', 'created_by',
-                       'row_counts', 'migrations', 'schema', 'sha256', 'size', 'used_by']
+                       'row_counts', 'migrations', 'restorable', 'live_tables', 'sha256', 'size', 'used_by']
     actions_list = ['take_snapshot', 'import_snapshot']
     actions_detail = ['explore', 'restore', 'export', 'download']
 
@@ -206,11 +231,11 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
         # One migration lookup per project for this request, not one per row.
         applied = {project: projectdata.applied_migrations(project) for project in PROJECT_APPS}
 
-        @admin.display(description='Schema')
-        def schema(obj):
-            return 'current' if obj.migrations == applied[obj.project] else 'older (not restorable)'
+        @admin.display(description='Restorable')
+        def restorable(obj):
+            return 'yes' if obj.migrations == applied[obj.project] else 'no: older migrations'
 
-        return ['id', 'project', 'kind', 'label', 'created_at', 'created_by', 'rows', 'size_kb', schema]
+        return ['id', 'project', 'kind', 'label', 'created_at', 'created_by', 'rows', 'size_kb', restorable]
 
     @admin.display(description='Rows')
     def rows(self, obj):
@@ -220,10 +245,15 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     def size_kb(self, obj):
         return round(obj.size / 1024, 1)
 
-    @admin.display(description='Schema')
-    def schema(self, obj):
+    @admin.display(description='Restorable')
+    def restorable(self, obj):
         current = projectdata.applied_migrations(obj.project)
-        return 'current' if obj.migrations == current else 'older (not restorable)'
+        return 'yes' if obj.migrations == current else 'no: taken with older migrations of its code models'
+
+    @admin.display(description='Live tables')
+    def live_tables(self, obj):
+        # Restoring rebuilds these tables as they were.
+        return ', '.join(f"{table['name']} ({len(table['columns'])} columns)" for table in obj.schema) or '-'
 
     @admin.display(description='Site versions built from it')
     def used_by(self, obj):
@@ -247,7 +277,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     def take_snapshot(self, request):
         form = TakeSnapshotForm(request.POST or None)
         if request.method == 'POST' and form.is_valid():
-            snapshot, _ = projectdata.take_snapshot(form.cleaned_data['project'], kind='manual',
+            snapshot = projectdata.take_snapshot(form.cleaned_data['project'], kind='manual',
                                                     user=request.user, label=form.cleaned_data['label'])
             self.message_user(request, f'Took snapshot #{snapshot.pk} of {snapshot.project}.', messages.SUCCESS)
             return HttpResponseRedirect(reverse('admin:apiary_datasnapshot_change', args=[snapshot.pk]))
@@ -310,8 +340,14 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
         return snapshot
 
     @staticmethod
-    def relation_links(project, table):
-        """field -> related table, from the current model if it still has that field."""
+    def relation_links(project, table, schema=()):
+        """
+        field -> related table: live tables' from the snapshot's own schema,
+        code models' from the current model if it still has that field.
+        """
+        for spec in schema:
+            if spec['name'] == table:
+                return {column['name']: column['target'] for column in spec['columns'] if column['type'] == 'relation'}
         try:
             model = apps.get_model(project, table)
         except LookupError:
@@ -345,7 +381,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
             needle = search.lower()
             rows = [row for row in rows if any(needle in self.cell(value).lower() for value in row.values())]
         page = Paginator(rows, self.EXPLORE_PAGE_SIZE).get_page(request.GET.get('page'))
-        links = self.relation_links(snapshot.project, name) if name else {}
+        links = self.relation_links(snapshot.project, name, snapshot.schema) if name else {}
         body = [[(self.cell(row.get(column)), links.get(column) if row.get(column) is not None else None)
                  for column in columns] for row in page]
         console = [{'name': table, 'rows': len(table_rows),
@@ -388,7 +424,7 @@ class SiteVersionInline(admin.TabularInline):
     model = SiteVersion
     extra = 0
     can_delete = False
-    fields = ['number', 'status', 'published_at', 'created_by', 'file_list', 'datasets', 'snapshot']
+    fields = ['number', 'status', 'published_at', 'created_by', 'file_list', 'snapshot']
     readonly_fields = fields
 
     @admin.display(description='Status')
@@ -559,8 +595,7 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         if request.method != 'POST':
             draft = site.versions.filter(published_at__isnull=True).first()
             return self.page(request, f'Publish {site}', form=forms.Form(), submit_label='Publish',
-                             intro=(f'Publishes draft v{draft.number} ({len(draft.files)} files), capturing its '
-                                    f'datasets with a snapshot of {site.project} from the same moment.')
+                             intro=f'Publishes draft v{draft.number} ({len(draft.files)} files).'
                              if draft else 'There is no draft; publishing starts one from the live version.')
         try:
             version = sites.publish(site, user=request.user)
@@ -593,3 +628,112 @@ class SiteAdmin(SuperuserOnly, ModelAdmin):
         sites.unpublish(site)
         self.message_user(request, f'{site} is offline; its versions are kept.', messages.SUCCESS)
         return self.back(site)
+
+
+@admin.register(Change)
+class ChangeAdmin(SuperuserOnly, ModelAdmin):
+    """
+    Every change to project tables and records (apiary.changes): proposals to
+    apply or reject, and applied records changes to revert. Never deleted.
+    """
+    list_display = ['id', 'project', 'kind', 'status', 'summary', 'proposed_by', 'proposed_via', 'proposed_at', 'decided_at']
+    list_filter = ['project', 'kind', 'status']
+    search_fields = ['summary', 'reason']
+    readonly_fields = ['project', 'kind', 'status', 'summary', 'reason', 'operations_json', 'effects', 'sql',
+                       'sample', 'proposed_by', 'proposed_via', 'proposed_at', 'expires_at', 'decided_by',
+                       'decided_via', 'decided_at', 'schema_version', 'snapshot', 'reverts', 'error']
+    fields = readonly_fields
+    actions_detail = ['apply_change', 'reject_change', 'revert_change']
+    VIA = 'admin'
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @staticmethod
+    def pretty(value):
+        return format_html('<pre class="whitespace-pre-wrap text-xs">{}</pre>', json.dumps(value, indent=2, cls=DjangoJSONEncoder))
+
+    @admin.display(description='Operations')
+    def operations_json(self, obj):
+        return self.pretty(obj.operations)
+
+    @admin.display(description='Effects')
+    def effects(self, obj):
+        return format_html('<br>'.join(['{}'] * len(obj.preview.get('effects', []))), *obj.preview.get('effects', [])) or '-'
+
+    @admin.display(description='SQL')
+    def sql(self, obj):
+        statements = obj.preview.get('sql')
+        return format_html('<pre class="whitespace-pre-wrap text-xs">{}</pre>', ';\n'.join(statements)) if statements else '-'
+
+    @admin.display(description='Rows (sample)')
+    def sample(self, obj):
+        rows = obj.preview.get('sample') or obj.after[:5]
+        return self.pretty(rows) if rows else '-'
+
+    def decide(self, request, object_id, verb, run):
+        change = self.get_object(request, object_id)
+        back = HttpResponseRedirect(reverse('admin:apiary_change_change', args=[object_id]))
+        # Detail actions are links: change state only on the confirming POST.
+        if request.method != 'POST':
+            return TemplateResponse(request, 'admin/apiary/form_page.html', {
+                **self.admin_site.each_context(request), 'opts': self.opts, 'title': f'{verb} change #{change.pk}',
+                'intro': f'{change.summary}. {change.reason}'.strip(), 'form': forms.Form(), 'submit_label': verb,
+            })
+        try:
+            run(change)
+        except changes.ChangeError as error:
+            self.message_user(request, str(error), messages.ERROR)
+        else:
+            self.message_user(request, f'{verb}: change #{change.pk}.', messages.SUCCESS)
+        return back
+
+    @action(description='Apply', url_path='apply', icon='check', permissions=['superuser'])
+    def apply_change(self, request, object_id):
+        return self.decide(request, object_id, 'Apply', lambda change: changes.apply(change, request.user, via=self.VIA))
+
+    @action(description='Reject', url_path='reject', icon='block', permissions=['superuser'])
+    def reject_change(self, request, object_id):
+        return self.decide(request, object_id, 'Reject', lambda change: changes.reject(change, request.user, via=self.VIA))
+
+    @action(description='Revert', url_path='revert', icon='undo', permissions=['superuser'])
+    def revert_change(self, request, object_id):
+        return self.decide(request, object_id, 'Revert', lambda change: changes.revert(change, request.user, via=self.VIA))
+
+    def get_urls(self):
+        return [
+            path('tables/<slug:project>/', self.admin_site.admin_view(self.tables_view), name='apiary_project_tables'),
+        ] + super().get_urls()
+
+    TABLE_ROWS = 50
+
+    def tables_view(self, request, project):
+        """A project's tables, their columns and first rows, for anyone with a role there."""
+        if project not in PROJECT_APPS:
+            raise Http404
+        if not has_role(request.user, project, 'viewer'):
+            raise PermissionDenied
+        alias = project_alias(project)
+        tables = []
+        for name, model in project_models(project).items():
+            fields = model._meta.concrete_fields
+            rows = model._default_manager.using(alias).order_by('pk')
+            tables.append({
+                'name': name,
+                'label': model._meta.verbose_name,
+                'live': model._meta.apps is not apps,
+                'columns': [{'name': f.name, 'type': changes_type(f), 'required': not f.null} for f in fields],
+                'count': rows.count(),
+                'rows': [[f.value_from_object(obj) for f in fields] for obj in rows[:self.TABLE_ROWS]],
+            })
+        return TemplateResponse(request, 'admin/apiary/tables.html', {
+            **self.admin_site.each_context(request), 'opts': self.opts, 'title': f'{project} tables',
+            'project': project, 'tables': tables, 'limit': self.TABLE_ROWS,
+            'changes_url': reverse('admin:apiary_change_changelist') + f'?project__exact={project}',
+        })
+
+
+def changes_type(field):
+    if field.is_relation:
+        return f'link to {field.related_model._meta.model_name}'
+    return type(field).__name__.removesuffix('Field').lower() or 'id'

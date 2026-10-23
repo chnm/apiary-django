@@ -1,5 +1,5 @@
 """
-Read-only MCP server for users' AI agents at /mcp, on the official MCP SDK.
+MCP server for users' AI agents at /mcp, on the official MCP SDK.
 
 It runs under uvicorn beside Gunicorn (a second container in the app pod), so
 Django itself stays WSGI:
@@ -8,8 +8,10 @@ Django itself stays WSGI:
 
 Agents authenticate with a bearer token: an OAuth access token, which an MCP
 client gets with its user's approval (this app is the authorization server,
-apiary.mcp_oauth), or an APIToken from the admin. Every token may read every
-project for now; the site tools (apiary.sites) need a staff user.
+apiary.mcp_oauth), or an APIToken from the admin. A token's scopes say what
+it may do: mcp:read reads every project, mcp:write changes records (as the
+user's project role allows, apiary.changes) and publishes sites (staff),
+mcp:schema changes live tables (apiary.live).
 """
 import base64
 import binascii
@@ -25,9 +27,9 @@ django.setup()
 from asgiref.sync import sync_to_async  # noqa: E402
 from django.apps import apps  # noqa: E402
 from django.conf import settings  # noqa: E402
-from django.core.exceptions import FieldDoesNotExist, FieldError, ValidationError  # noqa: E402
+from django.core.exceptions import FieldError, ValidationError  # noqa: E402
 from django.core.serializers.json import DjangoJSONEncoder  # noqa: E402
-from django.db import connections, router  # noqa: E402
+from django.db import connections  # noqa: E402
 from django.db.models import Avg, Count, Max, Min, Sum  # noqa: E402
 from mcp.server import MCPServer  # noqa: E402
 from mcp.server.auth.middleware.auth_context import get_access_token  # noqa: E402
@@ -44,18 +46,21 @@ from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 from mcp.shared.auth import OAuthToken as TokenResponse  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
+from mcp.types import ToolAnnotations  # noqa: E402
 
-from apiary import mcp_oauth, sites  # noqa: E402
-from apiary.api.datasets import api as datasets_api  # noqa: E402
-from apiary.models import APIToken  # noqa: E402
-from apiary.views import PROJECT_APPS  # noqa: E402
+from apiary import changes, mcp_oauth, queries, sites  # noqa: E402
+from apiary.live.runtime import live_specs  # noqa: E402
+from apiary.models import APIToken, Change, OAuthClient  # noqa: E402
+from apiary.projects import (  # noqa: E402
+    PROJECT_APPS,
+    UnknownProject,
+    code_models,
+    project_alias,
+    project_models,
+    role,
+)
 
 MAX_LIMIT = 500
-LOOKUPS = {
-    "exact", "iexact", "contains", "icontains", "in", "gt", "gte", "lt", "lte",
-    "startswith", "istartswith", "endswith", "iendswith", "range", "isnull",
-    "year", "month", "day",
-}
 METRICS = {"count": Count, "sum": Sum, "avg": Avg, "min": Min, "max": Max}
 
 
@@ -156,7 +161,7 @@ class OAuthProvider:
                 return AccessToken(
                     token=token,
                     client_id=f"apitoken-{api_token.pk}",
-                    scopes=[],
+                    scopes=api_token.scopes,
                     resource=mcp_oauth.resource_url(),
                     subject=str(api_token.user_id),
                 )
@@ -181,47 +186,27 @@ class OAuthProvider:
         )
 
 
-def get_model(project, model):
-    if project not in PROJECT_APPS:
-        raise ToolError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
-    models = {m._meta.model_name: m for m in apps.get_app_config(project).get_models()}
-    if model not in models:
-        raise ToolError(f"Unknown model {model!r} in {project}; one of {', '.join(models)}.")
-    return models[model]
+def get_model(project, table):
+    try:
+        models = project_models(project)
+    except UnknownProject as error:
+        raise ToolError(str(error))
+    if table not in models:
+        raise ToolError(f"No table {table!r} in {project}; one of {', '.join(models) or 'none yet'}.")
+    return models[table]
 
 
 def check_path(model, path, lookups=False):
-    """
-    Allow only fields of the model's own project, so a filter or grouping
-    cannot reach users, tokens or another project.
-    """
-    parts = path.lstrip("-").split("__")
-    current = model
-    for i, part in enumerate(parts):
-        last = i == len(parts) - 1
-        try:
-            field = current._meta.get_field(part)
-        except FieldDoesNotExist:
-            if lookups and last and i > 0 and part in LOOKUPS:
-                return
-            raise ToolError(f"Unknown field {part!r} on {current._meta.model_name}.")
-        if field.is_relation:
-            if field.related_model._meta.app_label != model._meta.app_label:
-                raise ToolError(f"{part!r} leaves the {model._meta.app_label} project.")
-            current = field.related_model
-        elif not last:
-            rest = parts[i + 1:]
-            if lookups and len(rest) == 1:
-                if rest[0] in LOOKUPS:
-                    return
-                raise ToolError(f"Unsupported lookup {rest[0]!r} on {part!r}; one of {', '.join(sorted(LOOKUPS))}.")
-            raise ToolError(f"{part!r} on {current._meta.model_name} is not a relation.")
+    try:
+        queries.check_path(model, path, lookups=lookups)
+    except queries.QueryError as error:
+        raise ToolError(str(error))
 
 
 def filtered(model, filters):
     for path in filters or {}:
         check_path(model, path, lookups=True)
-    return model.objects.filter(**(filters or {}))
+    return model.objects.using(project_alias(model._meta.app_label)).filter(**(filters or {}))
 
 
 def evaluate(fn):
@@ -234,35 +219,54 @@ def evaluate(fn):
         return fn()
     except (FieldError, ValidationError, TypeError, ValueError) as error:
         raise ToolError(str(error)) from error
+    except changes.ChangeError as error:
+        raise ToolError(str(error)) from error
 
 
-def describe(project):
-    config = apps.get_app_config(project)
-    models = list(config.get_models())
+def column_type(field):
+    if field.is_relation:
+        return f"relation -> {field.related_model._meta.model_name}"
+    return type(field).__name__
+
+
+def describe(project, user):
+    alias = project_alias(project)
+    code = code_models(project)
+    live = {table["name"]: table for table in live_specs(project)}
+    tables = {}
+    for name, model in project_models(project).items():
+        if name in live:
+            spec = live[name]
+            tables[name] = {"kind": "live", "label": spec["label"], "description": spec["description"],
+                            "columns": {c["name"]: {key: c[key] for key in ("type", "required", "unique", "max_length", "target", "default", "label")
+                                                    if c[key] not in (None, "", False)} for c in spec["columns"]}}
+        else:
+            tables[name] = {"kind": "code", "columns": {
+                field.name: column_type(field) + (" (nullable)" if field.null else "")
+                for field in model._meta.concrete_fields}}
     return {
         "project": project,
-        "name": config.verbose_name,
-        "database": connections[router.db_for_read(models[0])].display_name,
-        "models": {
-            model._meta.model_name: {
-                field.name: (
-                    f"{type(field).__name__} -> {field.related_model._meta.model_name}"
-                    if field.is_relation else type(field).__name__
-                ) + (" (nullable)" if field.null else "")
-                for field in model._meta.concrete_fields
-            }
-            for model in models
-        },
+        "name": str(apps.get_app_config(project).verbose_name),
+        "database": connections[alias].display_name,
+        "your_role": role(user, project),
+        "tables": tables,
+        "code_tables_note": "Code tables (demo's) change only through the codebase." if code else None,
     }
 
 
 mcp = MCPServer(
     name="apiary",
     instructions=(
-        "Read access to the Apiary digital humanities projects' data: call list_projects first "
-        "for each project's models and fields. Staff can also publish static sites, each on its "
-        "own host (<name>.sites.rrchnm.org): create_site, put_files (index.html required), attach_dataset to freeze a dataset "
-        "into the site as JSON, then publish_site. Sites are versioned: rollback_site restores one."
+        "Apiary holds digital humanities projects, each with its own tables. Call list_projects first: "
+        "it lists each project's tables and columns and your role there. Read with query_records, "
+        "get_record and aggregate. With the write scope, editors change rows with create_records and "
+        "update_records, admins with delete_records; changes over 25 rows come back as a proposal to "
+        "show the user and then apply_change. Every change is recorded (list_changes) and records "
+        "changes can be undone with revert_change. With the schema scope, project admins change "
+        "tables with propose_table_change (create, drop, rename tables; add, drop, rename, alter "
+        "columns), always a proposal: show its effects and SQL, then apply_change. Staff can also "
+        "publish static sites, each on its own host (<name>.sites.rrchnm.org): create_site, "
+        "put_files (index.html required), then publish_site. Sites are versioned: rollback_site restores one."
     ),
     auth_server_provider=OAuthProvider(),
     # The SDK serves the authorization server's metadata, /authorize, /token,
@@ -272,61 +276,105 @@ mcp = MCPServer(
         issuer_url=settings.MCP_URL,
         resource_server_url=mcp_oauth.resource_url(),
         validate_token_resource=True,
-        client_registration_options=ClientRegistrationOptions(enabled=True),
+        # Clients may ask for any scope; the user grants scopes on the consent page.
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True, valid_scopes=list(mcp_oauth.SCOPES), default_scopes=list(mcp_oauth.SCOPES)),
         revocation_options=RevocationOptions(enabled=True),
     ),
 )
 
+READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
+DESTRUCTIVE = ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False)
 
-@mcp.tool()
+
+def current_user(scope="mcp:read", staff=False):
+    """The token's user, once the token has the scope."""
+    from django.contrib.auth import get_user_model
+
+    token = get_access_token()
+    if token is None:
+        raise ToolError("No token.")
+    if scope not in (token.scopes or []):
+        raise ToolError(f"This token lacks the {scope} scope; reconnect and grant it, or ask for a token with it.")
+    user = get_user_model().objects.filter(pk=token.subject, is_active=True).first()
+    if user is None:
+        raise ToolError("No active user for this token.")
+    if staff and not user.is_staff:
+        raise ToolError("Publishing sites needs a staff account.")
+    return user
+
+
+def via():
+    """The client acting, for the change record."""
+    token = get_access_token()
+    client_id = token.client_id if token else ""
+    if client_id.startswith("apitoken-"):
+        name = APIToken.objects.filter(pk=client_id.removeprefix("apitoken-")).values_list("name", flat=True).first()
+        return f"MCP: API token {name or client_id}"
+    name = OAuthClient.objects.filter(client_id=client_id).values_list("name", flat=True).first()
+    return f"MCP: {name or client_id or 'unknown client'}"
+
+
+def tool(scope, fn):
+    """Run fn(user, ...) for the token's user with this scope, on the ORM thread."""
+    def run(*args, **kwargs):
+        user = current_user(scope)
+        return evaluate(lambda: fn(user, *args, **kwargs))
+    return orm(run)
+
+
+@mcp.tool(annotations=READ)
 async def list_projects() -> dict:
-    """List the projects with their database backend and each model's fields."""
-    return await orm(lambda: {"projects": [describe(project) for project in PROJECT_APPS]})()
+    """List the projects: each table with its columns, the database, and your role there."""
+    def run(user):
+        return {"projects": [describe(project, user) for project in PROJECT_APPS]}
+    return await tool("mcp:read", run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ)
 async def query_records(
     project: str,
-    model: str,
+    table: str,
     filters: dict[str, Any] | None = None,
     order_by: list[str] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
     """
-    Read a page of records. filters use Django field lookups within the
+    Read a page of rows. filters use Django field lookups within the
     project, e.g. {"year__gte": 1665, "type__icontains": "plague"} or
-    {"location__locality": "Atlanta"}; order_by takes field names, "-" for
-    descending. Returns the total count and up to limit records (max 500).
+    {"location__locality": "Atlanta"}; order_by takes column names, "-" for
+    descending. Returns the total count and up to limit rows (max 500).
     """
-    def run():
-        target = get_model(project, model)
+    def run(user):
+        target = get_model(project, table)
         for path in order_by or []:
             check_path(target, path)
         records = filtered(target, filters).order_by(*(order_by or ["pk"]))
         names = [field.name for field in target._meta.concrete_fields]
         page = slice(max(offset, 0), max(offset, 0) + min(max(limit, 1), MAX_LIMIT))
         return {"count": records.count(), "results": jsonable(list(records.values(*names)[page]))}
-    return await orm(lambda: evaluate(run))()
+    return await tool("mcp:read", run)()
 
 
-@mcp.tool()
-async def get_record(project: str, model: str, id: int) -> dict:
-    """Read one record by its id."""
-    def run():
-        target = get_model(project, model)
+@mcp.tool(annotations=READ)
+async def get_record(project: str, table: str, id: int) -> dict:
+    """Read one row by its id."""
+    def run(user):
+        target = get_model(project, table)
         names = [field.name for field in target._meta.concrete_fields]
-        record = target.objects.filter(pk=id).values(*names).first()
+        record = filtered(target, {}).filter(pk=id).values(*names).first()
         if record is None:
-            raise ToolError(f"No {model} with id {id} in {project}.")
+            raise ToolError(f"No row {id} in {project}.{table}.")
         return jsonable(record)
-    return await orm(lambda: evaluate(run))()
+    return await tool("mcp:read", run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ)
 async def aggregate(
     project: str,
-    model: str,
+    table: str,
     metric: Literal["count", "sum", "avg", "min", "max"] = "count",
     field: str | None = None,
     group_by: list[str] | None = None,
@@ -334,12 +382,12 @@ async def aggregate(
     limit: int = 100,
 ) -> dict:
     """
-    Count records, or sum/average/min/max a field, optionally grouped by
-    fields (related fields too, e.g. "location__locality"), largest first.
+    Count rows, or sum/average/min/max a column, optionally grouped by
+    columns (related ones too, e.g. "location__locality"), largest first.
     filters work as in query_records.
     """
-    def run():
-        target = get_model(project, model)
+    def run(user):
+        target = get_model(project, table)
         if metric != "count" and not field:
             raise ToolError(f"{metric} needs a field.")
         for path in [*(group_by or []), *([field] if field else [])]:
@@ -350,63 +398,149 @@ async def aggregate(
             return {"rows": jsonable([records.aggregate(value=value)])}
         rows = records.values(*group_by).annotate(value=value).order_by("-value", *group_by)
         return {"rows": jsonable(list(rows[:min(max(limit, 1), MAX_LIMIT)]))}
-    return await orm(lambda: evaluate(run))()
+    return await tool("mcp:read", run)()
 
 
-def current_user(staff=False):
-    """The token's user. The site tools publish under it, so they need staff."""
-    from django.contrib.auth import get_user_model
+@mcp.tool(annotations=WRITE)
+async def create_records(project: str, table: str, rows: list[dict[str, Any]], reason: str = "") -> dict:
+    """
+    Add rows (up to 500), each {column: value}; relations take the linked
+    row's id. All or none are added. Needs the editor role and the write scope.
+    """
+    def run(user):
+        change = changes.create_records(user, project, table, rows, via=via(), reason=reason)
+        return {"change": change.pk, "ids": [r["id"] for r in change.after]}
+    return await tool("mcp:write", run)()
 
-    token = get_access_token()
-    user = get_user_model().objects.filter(pk=token.subject, is_active=True).first() if token else None
-    if user is None:
-        raise ToolError("No active user for this token.")
-    if staff and not user.is_staff:
-        raise ToolError("Publishing sites needs a staff account.")
-    return user
+
+@mcp.tool(annotations=WRITE)
+async def update_records(project: str, table: str, values: dict[str, Any], ids: list[int] | None = None,
+                         filters: dict[str, Any] | None = None, reason: str = "") -> dict:
+    """
+    Set values ({column: new value}) on the rows given by ids or filters (as
+    in query_records). Up to 25 rows apply at once; more return a proposal
+    with a sample to show the user, applied with apply_change. Needs the
+    editor role and the write scope.
+    """
+    def run(user):
+        change = changes.change_records(user, project, table, "update", via=via(), ids=ids, filters=filters,
+                                        values=values, reason=reason)
+        return changes.describe(change)
+    return await tool("mcp:write", run)()
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+async def delete_records(project: str, table: str, ids: list[int] | None = None,
+                         filters: dict[str, Any] | None = None, reason: str = "") -> dict:
+    """
+    Delete the rows given by ids or filters. Up to 25 rows apply at once;
+    more return a proposal, applied with apply_change. revert_change brings
+    them back. Needs the admin role and the write scope.
+    """
+    def run(user):
+        change = changes.change_records(user, project, table, "delete", via=via(), ids=ids, filters=filters,
+                                        reason=reason)
+        return changes.describe(change)
+    return await tool("mcp:write", run)()
+
+
+@mcp.tool(annotations=WRITE)
+async def propose_table_change(project: str, operations: list[dict[str, Any]], reason: str) -> dict:
+    """
+    Propose changes to a project's live tables, applied together with
+    apply_change once the user has seen the effects and SQL. operations, in order:
+    {"op": "create_table", "table": "letters", "label": "", "columns": [column, ...]},
+    {"op": "drop_table", "table": t}, {"op": "rename_table", "table": t, "to": new},
+    {"op": "add_column", "table": t, "column": column}, {"op": "drop_column", "table": t, "column": c},
+    {"op": "rename_column", "table": t, "column": c, "to": new},
+    {"op": "alter_column", "table": t, "column": c, "changes": {"required": true, ...}}.
+    A column is {"name", "type": text|longtext|integer|float|boolean|date|datetime|time|json|url|email|relation,
+    and optionally "label", "description", "required", "unique", "max_length" (text), "target" (relation:
+    the linked table), "default"}. Types never change in place. reason (required) says why. Needs the
+    admin role and the schema scope.
+    """
+    def run(user):
+        change = changes.propose_schema(user, project, operations, via=via(), reason=reason)
+        return changes.describe(change)
+    return await tool("mcp:schema", run)()
+
+
+def change_or_error(id):
+    change = Change.objects.filter(pk=id).select_related("proposed_by", "decided_by").first()
+    if change is None:
+        raise ToolError(f"No change #{id}.")
+    return change
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+async def apply_change(id: int) -> dict:
+    """
+    Apply a proposed change once the user agrees. Table changes need the
+    schema scope and snapshot the project first; records changes need the
+    write scope and check the rows have not changed since.
+    """
+    def run(user):
+        change = change_or_error(id)
+        current_user("mcp:schema" if change.kind == "schema" else "mcp:write")
+        return changes.describe(changes.apply(change, user, via=via()))
+    return await tool("mcp:read", run)()
+
+
+@mcp.tool(annotations=WRITE)
+async def reject_change(id: int) -> dict:
+    """Reject a proposed change, e.g. when the user declines it."""
+    def run(user):
+        change = change_or_error(id)
+        current_user("mcp:schema" if change.kind == "schema" else "mcp:write")
+        return changes.describe(changes.reject(change, user, via=via()))
+    return await tool("mcp:read", run)()
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+async def revert_change(id: int, reason: str = "") -> dict:
+    """Undo an applied records change while its rows are still as it left them. Needs the write scope."""
+    def run(user):
+        return changes.describe(changes.revert(change_or_error(id), user, via=via(), reason=reason))
+    return await tool("mcp:write", run)()
+
+
+@mcp.tool(annotations=READ)
+async def list_changes(project: str | None = None, status: str | None = None, limit: int = 20) -> dict:
+    """The latest changes (newest first): proposals awaiting a decision, applied, rejected, failed, reverted."""
+    def run(user):
+        found = Change.objects.select_related("proposed_by", "decided_by")
+        if project:
+            found = found.filter(project=project)
+        if status:
+            found = found.filter(status=status)
+        return {"changes": [changes.describe(change) for change in found[:min(max(limit, 1), 100)]]}
+    return await tool("mcp:read", run)()
 
 
 def site_tool(fn):
-    """Run fn(user, ...) for a staff user, reporting site errors to the agent."""
+    """Run fn(user, ...) for a staff user with the write scope, reporting site errors to the agent."""
     def run(*args, **kwargs):
         try:
-            return fn(current_user(staff=True), *args, **kwargs)
+            return fn(current_user("mcp:write", staff=True), *args, **kwargs)
         except sites.SiteError as error:
             raise ToolError(str(error)) from error
     return orm(run)
 
 
-@mcp.tool()
-async def list_datasets(project: str) -> dict:
-    """List a project's derived datasets (aggregates, time series), for attach_dataset."""
-    def run():
-        if project not in PROJECT_APPS:
-            raise ToolError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
-        prefix = f"/api/{project}/v1/datasets/"
-        schema = datasets_api.get_openapi_schema()
-        return {"datasets": [
-            {"name": path[len(prefix):].strip("/"), "description": operation.get("description", "").strip(),
-             "params": [param["name"] for param in operation.get("parameters", [])]}
-            for path, item in schema["paths"].items() if path.startswith(prefix)
-            for operation in item.values()
-        ]}
-    return await orm(run)()
-
-
-@mcp.tool()
+@mcp.tool(annotations=READ)
 async def list_sites(project: str | None = None) -> dict:
     """List the static sites, with their public URL, live version and versions."""
-    def run():
+    def run(user):
         from apiary.models import Site
 
         found = Site.objects.order_by("project", "name").prefetch_related("versions")
         if project:
             found = found.filter(project=project)
         return {"sites": [sites.describe(site) for site in found]}
-    return await orm(run)()
+    return await tool("mcp:read", run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE)
 async def create_site(project: str, name: str, title: str = "") -> dict:
     """
     Create an empty static site for a project, served at <name>.sites.rrchnm.org.
@@ -418,7 +552,7 @@ async def create_site(project: str, name: str, title: str = "") -> dict:
     return await site_tool(run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE)
 async def put_files(project: str, site: str, files: list[dict[str, str]]) -> dict:
     """
     Add or replace files in the site's draft. Each file is {"path": "index.html",
@@ -441,44 +575,26 @@ async def put_files(project: str, site: str, files: list[dict[str, str]]) -> dic
     return await site_tool(run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def delete_files(project: str, site: str, paths: list[str]) -> dict:
-    """Remove files (or attached datasets) from the site's draft. Staff only."""
+    """Remove files from the site's draft. Staff only."""
     def run(user):
         version = sites.delete_files(sites.get_site(project, site), paths, user=user)
-        return {"draft_version": version.number, "files": sorted(version.files), "datasets": version.datasets}
+        return {"draft_version": version.number, "files": sorted(version.files)}
     return await site_tool(run)()
 
 
-@mcp.tool()
-async def attach_dataset(project: str, site: str, dataset: str,
-                         params: dict[str, Any] | None = None, path: str | None = None) -> dict:
-    """
-    Freeze a dataset (list_datasets) into the site as JSON, at path (default
-    data/<dataset>.json), captured anew each time the site is published. The
-    page fetches it relatively, e.g. fetch("data/deaths-by-year.json"). Staff only.
-    """
-    def run(user):
-        version = sites.attach_dataset(sites.get_site(project, site), dataset, params=params, path=path, user=user)
-        return {"draft_version": version.number, "datasets": version.datasets}
-    return await site_tool(run)()
-
-
-@mcp.tool()
+@mcp.tool(annotations=WRITE)
 async def publish_site(project: str, site: str) -> dict:
-    """
-    Publish the draft: capture its datasets with a snapshot of the project's data
-    from the same moment, then make it the live version. Returns the URL. Staff only.
-    """
+    """Publish the draft: make it the live version. Returns the URL. Staff only."""
     def run(user):
         target = sites.get_site(project, site)
         version = sites.publish(target, user=user)
-        return {"url": sites.site_url(target), "version": version.number,
-                "data_snapshot": version.data_snapshot_id, "files": sorted(version.files)}
+        return {"url": sites.site_url(target), "version": version.number, "files": sorted(version.files)}
     return await site_tool(run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE)
 async def rollback_site(project: str, site: str, version: int) -> dict:
     """Make an earlier published version live again. Staff only."""
     def run(user):
@@ -488,7 +604,7 @@ async def rollback_site(project: str, site: str, version: int) -> dict:
     return await site_tool(run)()
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def unpublish_site(project: str, site: str) -> dict:
     """Take the site offline; its versions are kept. Staff only."""
     def run(user):

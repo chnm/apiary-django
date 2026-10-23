@@ -10,8 +10,10 @@ import json
 import zipfile
 
 from django.apps import apps
-from django.db import connections, models, router, transaction
+from django.db import connections, models, transaction
 from django.utils import timezone
+
+from apiary.projects import project_alias, project_models
 
 FIELD_TYPES = [
     ((models.BooleanField,), "boolean"),
@@ -49,7 +51,7 @@ def resource(model):
     fields = model._meta.concrete_fields
     foreign_keys = [
         {"fields": field.attname,
-         "reference": {"resource": field.related_model._meta.db_table, "fields": field.target_field.attname}}
+         "reference": {"resource": field.related_model._meta.model_name, "fields": field.target_field.attname}}
         for field in fields if field.is_relation
     ]
     schema = {
@@ -60,9 +62,9 @@ def resource(model):
         schema["foreignKeys"] = foreign_keys
     return {
         "profile": "tabular-data-resource",
-        "name": model._meta.db_table,
+        "name": model._meta.model_name,
         "title": str(model._meta.verbose_name_plural).capitalize(),
-        "path": f"{model._meta.db_table}.csv",
+        "path": f"{model._meta.model_name}.csv",
         "format": "csv",
         "mediatype": "text/csv",
         "encoding": "utf-8",
@@ -73,8 +75,8 @@ def resource(model):
 def write_project_zip(project, destination):
     """Write the project's export to the binary file object destination."""
     config = apps.get_app_config(project)
-    table_models = list(config.get_models(include_auto_created=True))
-    alias = router.db_for_read(table_models[0])
+    alias = project_alias(project)
+    table_models = list(project_models(project).values())  # in code and live
     connection = connections[alias]
 
     # One snapshot of every table: PostgreSQL otherwise lets each SELECT see

@@ -2,7 +2,7 @@ from django.apps import apps
 from django.core.management.base import BaseCommand
 
 from apiary.models import Project
-from apiary.views import PROJECT_APPS
+from apiary.projects import PROJECT_APPS
 
 
 class Command(BaseCommand):

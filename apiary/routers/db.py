@@ -119,3 +119,38 @@ class PinkertonsRouter(AbstractRouter):
             app_label='pinkertons',
             db_name='pinkertons_db'
         )
+
+
+class DemoRouter(AbstractRouter):
+    def __init__(self):
+        super().__init__(
+            app_label='demo',
+            db_name='demo_db'
+        )
+
+
+class LiveRouter:
+    """
+    apiary.live's tables (each project's live table definitions) belong in
+    every project database and nowhere else. Its models are always used with
+    an explicit .using(alias): related rows follow the row they belong to.
+    """
+    def db_for_read(self, model, **hints):
+        return self.db_for_write(model, **hints)
+
+    def db_for_write(self, model, **hints):
+        instance = hints.get("instance")
+        if model._meta.app_label == "live" and instance is not None:
+            return instance._state.db
+        return None
+
+    def allow_relation(self, obj1, obj2, **hints):
+        if obj1._meta.app_label == obj2._meta.app_label == "live":
+            return obj1._state.db == obj2._state.db
+        return None
+
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        if app_label == "live":
+            from apiary.projects import PROJECT_DATABASES
+            return db in PROJECT_DATABASES.values()
+        return None

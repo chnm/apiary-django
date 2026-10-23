@@ -40,3 +40,11 @@
     description: >
       Mapping Private Investigations traces the daily reports of Pinkerton
       operatives: who they watched, where, and how.
+- model: apiary.project
+  pk: 6
+  fields:
+    name: Demo
+    app_label: demo
+    description: >
+      Mock data for the public root page: London bills of mortality and
+      Pinkerton operative reports.

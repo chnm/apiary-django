@@ -6,8 +6,8 @@ The MCP container is the authorization server: the SDK serves the metadata,
 /register (RFC 7591), /authorize, /token and /revoke, validates the requests
 and checks PKCE (apiary.mcp_server). This module keeps their state in Django,
 and the consent page (apiary.views.mcp_authorize), behind Django's login,
-issues the authorization codes. Only active staff users may connect, because
-every MCP token can read every project.
+issues the authorization codes with the scopes the user grants there. Only
+active staff users may connect, because every MCP token can read every project.
 """
 import secrets
 from datetime import timedelta
@@ -23,6 +23,12 @@ from mcp.server.auth.provider import construct_redirect_uri
 
 from apiary.models import OAuthClient, OAuthGrant, OAuthToken
 
+# What a token may do; the consent page lets the user grant each.
+SCOPES = {
+    "mcp:read": "Read every project's tables and the change history",
+    "mcp:write": "Change records as your project roles allow, and publish sites",
+    "mcp:schema": "Change table structure in projects you administer",
+}
 REDIRECT_URIS_MAX = 10
 # Registration is open, so drop clients nobody approved within a day.
 UNUSED_CLIENT_AGE = timedelta(days=1)
@@ -96,10 +102,16 @@ def load_request(token):
     return signing.loads(token or "", salt=REQUEST_SALT, max_age=REQUEST_MAX_AGE)
 
 
-def approve(user, client, request):
-    """Issue an authorization code for user; return the client's redirect URL carrying it."""
+def granted_scopes(chosen):
+    """The scopes to grant from the consent form: always read, plus any known others chosen."""
+    return ["mcp:read", *[scope for scope in SCOPES if scope != "mcp:read" and scope in chosen]]
+
+
+def approve(user, client, request, scopes):
+    """Issue an authorization code for user with these scopes; return the client's redirect URL carrying it."""
     if not may_connect(user):
         raise OAuthError("access_denied", "Only active staff can connect MCP clients.")
+    request = {**request, "scopes": granted_scopes(scopes)}
     code = secrets.token_urlsafe(32)
     now = timezone.now()
     OAuthGrant.objects.filter(expires_at__lt=now).delete()

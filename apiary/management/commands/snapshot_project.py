@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from apiary import projectdata
-from apiary.views import PROJECT_APPS
+from apiary.projects import PROJECT_APPS
 
 
 class Command(BaseCommand):
@@ -12,7 +12,7 @@ class Command(BaseCommand):
         parser.add_argument("--label", default="")
 
     def handle(self, *args, project, label, **options):
-        snapshot, _ = projectdata.take_snapshot(project, kind="manual", label=label)
+        snapshot = projectdata.take_snapshot(project, kind="manual", label=label)
         self.stdout.write(f"Snapshot #{snapshot.pk} of {project}: {snapshot.size} bytes, sha256 {snapshot.sha256}")
         for table, count in snapshot.row_counts.items():
             self.stdout.write(f"  {table}: {count} rows")

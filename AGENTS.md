@@ -6,23 +6,21 @@ This document provides essential context for AI agents working in the Apiary Dja
 
 **Apiary Django** is a Django 5.2+ workspace application that hosts multiple digital humanities projects in a single deployment. It uses a multi-database architecture where each project has its own PostgreSQL schema (or SQLite database), with custom database routers to manage data isolation.
 
-**Core projects:**
+**Core apps** (`apiary/projects.py` lists the projects):
 - **apiary** - Main Django app with shared models and settings
-- **bom** (Death by Numbers) - Mortality data project
-- **connthreads** (Connecting Threads) - Indian weavers and African Caribbean consumers history
-- **mappingviolence** (Mapping Violence) - Violence mapping project
-- **relec** (Religious Ecologies) - American religious history with 1926 Census data
-- **pinkertons** (Pinkertons) - Pinkerton operative activities and locations
+- **apiary.live** (label `live`) - live table definitions, kept in every project database
+- **demo** (Demo) - mock models and fixtures for the public root page; the only project with models in code
+- **bom** (Death by Numbers), **connthreads** (Connecting Threads), **mappingviolence** (Mapping Violence), **relec** (Religious Ecologies), **pinkertons** (Pinkertons) - empty containers: their tables are created live, through MCP
 
 ## Technology Stack
 
 - **Python**: 3.14 (see `.python-version`; the image uses the StageX Python base)
 - **Django**: 5.2.7+
 - **Package Management**: `uv` (modern Python package manager)
-- **Database**: PostgreSQL 18 (with schema-per-project) + SQLite for bom_db and pinkertons_db
+- **Database**: PostgreSQL 18 (with schema-per-project) + SQLite (WAL) for bom_db and pinkertons_db
 - **Admin UI**: django-unfold (modern admin interface)
 - **Authentication**: django-allauth (ORCID, GitHub, Slack providers)
-- **API**: Django REST Framework + drf-spectacular for model CRUD; Django Ninja for derived datasets
+- **API**: Django REST Framework + drf-spectacular for table CRUD
 - **Storage**: S3-compatible object storage via django-storages (optional)
 - **Containerization**: Docker + Docker Compose
 
@@ -165,36 +163,78 @@ Router order in `DATABASE_ROUTERS` is critical - specific routers before fallbac
 **Schema Initialization:**
 PostgreSQL schemas are created via `postgres_initdb/schema.sql` on first database startup.
 
+### Projects, roles and live tables
+
+`apiary/projects.py` names the projects, their database aliases
+(`<project>_db`) and roles. A user's role in a project comes from the
+`<project>-viewer`, `-editor` and `-admin` groups (superusers are admins
+everywhere): viewers read, editors create and update rows, admins delete
+rows and change tables. `init_project_groups` creates the groups for every
+project; only demo's code models get model permissions too, for the admin.
+
+Live tables (`apiary/live/`) are a project's tables defined at runtime, like
+PocketBase collections. Their definitions (`LiveTable`, `LiveColumn`,
+`SchemaState`) live in the project's own database, so a schema change and its
+definitions commit in one transaction on PostgreSQL and SQLite alike.
+`runtime.py` builds Django models from them in a registry of their own
+(`managed = False`, table `live_<name>`), cached per process until
+`SchemaState` changes: migrations, the admin and `dumpdata` never see them.
+`projects.project_models(project)` gives a project's code models and live
+tables together; use it rather than the app registry.
+
+- `schema.py` plans operations (create, drop, rename table; add, drop,
+  rename, alter column), checking them against the data (a required column on
+  a table with rows needs a default, unique needs unique values, ...), shows
+  the SQL, and applies them with Django's schema editor. Column types never
+  change in place. Names: lowercase, not reserved, no `meta_` prefix.
+- Column types: text, longtext, integer, float, boolean, date, datetime,
+  time, json, url, email, relation (to a live table of the same project;
+  required links PROTECT, optional ones SET_NULL).
+- On SQLite the schema editor cannot run inside another transaction, so
+  tests that change tables are `TransactionTestCase`s and drop the tables
+  after (`apiary.live.testing.drop_live_tables`).
+
+### Changes
+
+`apiary/changes.py` changes tables and records and records each as a `Change`
+(who, through what, when, why, the operations, a preview, the rows before
+and after). Never pruned.
+
+- Records: creates apply at once. Updates and deletes of up to 25 rows apply
+  at once; more become a proposal with a sample, applied with `apply`, which
+  checks the rows have not changed since and snapshots first. Applied records
+  changes can be reverted while their rows are as they left them.
+- Tables: always a proposal (reason required), applied with `apply`, which
+  refuses if the schema moved since and snapshots the project first, so
+  restoring that snapshot undoes it.
+- Admin > Changes (superusers): review, apply, reject, revert. Each project's
+  sidebar section links its Tables page (`/admin/apiary/change/tables/<project>/`,
+  for anyone with a role there) and its changes.
+
 ### API
 
-Both APIs are namespaced by project, so model names never collide across
-projects and access follows the project's groups. Each project versions its
-API on its own: a breaking change to one project's models bumps only its
-version.
-
-- `/api/<project>/v1/<model>/` - DRF CRUD, generated for every project model
-  (`apiary/api/crud.py`). Reads need `view_<model>`, writes their own model
-  permission (`apiary/api/permissions.py`). Paginated with `limit`/`offset`.
-  Schema at `/api/schema/`, docs at `/api/docs/`.
-- `/api/<project>/v1/datasets/<name>/` - Ninja derived datasets (aggregates,
-  joins, time series) from each project's `datasets.py` router, collected in
-  `apiary/api/datasets.py`. Needs any permission in the project. Docs at
-  `/api/datasets/docs/`.
-
-Add a dataset by adding an endpoint to `<project>/datasets.py`. New models get
-CRUD automatically; never name a model `datasets`.
+`/api/<project>/v1/<table>/` - DRF CRUD for every table (`apiary/api/crud.py`),
+by project role (`apiary/api/permissions.py`). Demo's code models are on a
+router and in the OpenAPI schema (`/api/schema/`, docs at `/api/docs/`); live
+tables are served by one generic viewset, built from the current definitions,
+and left out of the schema. Writes are recorded as changes (via "API").
+Paginated with `limit`/`offset`.
 
 ### MCP for AI agents
 
 `/mcp` is an MCP server (`apiary/mcp_server.py`) on the official MCP SDK:
-read tools for any token, site tools for staff. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
+read tools, change tools by scope and project role, site tools for staff. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
 WSGI: a second container in the k8s app pod (it reads the node-local SQLite
 files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 
 - Auth: `Authorization: Bearer <token>`, either an OAuth access token or an
   `APIToken` (`apiary/models.py`) that superusers create and revoke in the
   admin (API Tokens; shown once). Only SHA-256 digests of tokens are stored.
-  Every token can read every project for now.
+- Scopes (`mcp_oauth.SCOPES`): `mcp:read` reads every project; `mcp:write`
+  changes records (as the user's role allows) and publishes sites (staff);
+  `mcp:schema` changes tables (project admins). OAuth users grant them on the
+  consent page; API tokens get them in the admin. Tokens from before scopes
+  keep read and write.
 - OAuth (`apiary/mcp_oauth.py`): the MCP container is the authorization
   server, on the SDK's handlers, at `MCP_URL`: metadata, `/register` (dynamic
   client registration), `/authorize`, `/token`, `/revoke`, and the protected
@@ -206,12 +246,16 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
   `/mcp` alone. Admin > MCP connections lists and ends connections; clients
   that registered but never connected are dropped after a day. The gateway
   routes those paths to the MCP container (`k8s/mcp-route.yaml`).
-- Read tools: `list_projects`, `query_records`, `get_record`, `aggregate`,
-  `list_datasets`, `list_sites`. Field paths are checked against the model's
-  own project, so filters cannot reach auth tables or another project.
-- Site tools (staff only, see Sites): `create_site`, `put_files`,
-  `delete_files`, `attach_dataset`, `publish_site`, `rollback_site`,
-  `unpublish_site`. Errors are `ToolError`s, so the agent sees why.
+- Read tools: `list_projects` (tables, columns, your role), `query_records`,
+  `get_record`, `aggregate`, `list_changes`, `list_sites`. Field paths are
+  checked against the table's own project (`apiary/queries.py`), so filters
+  cannot reach auth tables or another project.
+- Change tools (see Changes): `create_records`, `update_records`,
+  `delete_records`, `propose_table_change`, `apply_change`, `reject_change`,
+  `revert_change`. Tools carry MCP annotations (read-only, destructive).
+- Site tools (staff, write scope; see Sites): `create_site`, `put_files`,
+  `delete_files`, `publish_site`, `rollback_site`, `unpublish_site`. Errors
+  are `ToolError`s, so the agent sees why.
 - ORM calls run on asgiref's single sync thread and close their connections:
   outside Django's request cycle nothing else would.
 - The SDK's DNS-rebinding check uses `ALLOWED_HOSTS`.
@@ -219,14 +263,18 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 ### Data snapshots
 
 `apiary/projectdata.py` snapshots and restores one project's rows, on SQLite
-or PostgreSQL alike: a gzipped Django fixture plus `manifest.json` in private
-storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
+or PostgreSQL alike: a gzipped Django fixture of every table, code and live,
+plus `manifest.json` (format 2) in private storage under
+`snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
 
 - Read from one consistent moment (`REPEATABLE READ READ ONLY` on PostgreSQL).
-- Records the project's applied migrations; a restore refuses a snapshot from
-  another schema. It verifies the checksum before touching data, snapshots the
-  current rows first (so every restore can be undone), then flushes and loads
-  in one transaction.
+- Records the applied migrations of the project's code models and the
+  definitions of its live tables (`schema`). A restore refuses a snapshot from
+  other migrations, but rebuilds the live tables as the snapshot defines
+  them, so it undoes table changes too. It verifies the checksum and the
+  records before touching data, snapshots the current rows first (so every
+  restore can be undone), then flushes, rebuilds and loads in one
+  transaction (on SQLite, with foreign key checks deferred to the commit).
 - Admin > Data Snapshots (superusers; each project's sidebar section links its
   own): take one, compare a snapshot's rows with the current ones and restore
   it (typing the project name), download its data, delete it with its files.
@@ -238,16 +286,15 @@ storage under `snapshots/<project>/<key>/`, indexed by `DataSnapshot`.
   superuser-only admin URL; nothing runs on the server. DuckDB's Python wheels
   are glibc-only, so it cannot run in the StageX (musl) image.
 - Export / Import move a snapshot between environments as a zip bundle
-  (`manifest.json` + `data.json.gz`, format 1). Import checks the checksum,
-  the project, and that every record belongs to that project; restore checks
-  the records again, so a bundle can never write users or another project.
-  Imported snapshots are never pruned.
+  (`manifest.json` + `data.json.gz`, format 1 or 2). Import checks the
+  checksum, the project, the live table definitions, and that every record
+  belongs to that project; restore checks them again, so a bundle can never
+  write users or another project. Imported snapshots are never pruned.
 - `snapshot_project`, `restore_project_snapshot`, `reset_project_data` (which
   snapshots first) and `prune_snapshots` also run from `/apiary/mgmt/`.
-  Pruning removes only automatic snapshots past retention (newest 10 per
-  project and the last 30 days kept), never manual ones or those a site
-  version was built from. Future live schema changes should snapshot through
-  this.
+  Pruning removes only automatic snapshots (before resets, restores and
+  changes) past retention (newest 10 per project and the last 30 days kept),
+  never manual ones or those a site version was built from.
 
 ### Backups
 
@@ -258,7 +305,8 @@ everything. The nightly `postgres-backup` CronJob (k0s, 02:45 ET; patched in
 - PostgreSQL: `pg_dump` of every project schema, users, tokens, and the site
   and snapshot index.
 - SQLite: online-backup copies of `bom.sqlite3` and `pinkertons.sqlite3`,
-  integrity-checked.
+  integrity-checked and switched from WAL to a rollback journal so a
+  read-only mount can open them.
 - Object storage: the whole bucket (`python -m apiary.bucket dump`), with a
   manifest of every key and size. That covers site files, snapshot files and
   uploaded media.
@@ -285,10 +333,8 @@ cookies.
 - Files live in private storage under `sites/<project>/<site key>/v<n>/`.
   Tools write into the draft version; published versions never change, and
   rolling back points the site at an earlier one.
-- `attach_dataset` freezes a Ninja dataset into the site as JSON. Publishing
-  reads every dataset with the publisher's permissions inside one snapshot
-  (`DataSnapshot` kind `site`), so a site version records exactly the data it
-  shows.
+- Data a page shows is written into the site as files (JSON, CSV). Versions
+  published when sites still froze datasets keep the snapshot they read.
 - Limits: 2 MB a file, 200 files and 20 MB a site, a fixed list of file types.
 - Admin > Sites (superusers; each project's sidebar section links its own):
   create a site, upload a zip into its draft (put_files' checks; a single
@@ -355,12 +401,16 @@ User fixtures stored in `apiary/fixtures/users.yaml` for development.
 Load with: `uv run manage.py loaddata apiary/fixtures/projects.yaml` (Compose,
 on a fresh database only: it writes by primary key).
 
-Deployments never load it. `migrate_projects` (the k8s migrate Job) runs
-`sync_projects`, which gives every app in `PROJECT_APPS` a Project row named
-after the app and never changes an existing one, then `init_project_groups`.
-That command resets each `<project>-viewer/editor/admin` group to its role's
-permissions on every deploy, so new models are covered and hand edits to those
-groups do not last; give extra access with other groups.
+Deployments never load it. `migrate_projects` (the k8s migrate Job) creates
+the PostgreSQL schemas, migrates each project's app and `live` on its
+database, runs `sync_projects`, which gives every app in `PROJECT_APPS` a
+Project row named after the app and never changes an existing one, then
+`init_project_groups`, and loads `demo/fixtures/demo.json` when demo is
+empty. `init_project_groups` resets each `<project>-viewer/editor/admin`
+group to its role's permissions on every deploy, so new models are covered
+and hand edits to those groups do not last; give extra access with other
+groups. Only demo has fixtures; `reset_project_data` reloads them (other
+projects' rows are emptied, their live tables kept).
 
 ### Templates
 
@@ -409,14 +459,14 @@ Custom templates located in `apiary/templates/`:
    CREATE SCHEMA IF NOT EXISTS newproject;
    ```
 
-6. **Add app to `INSTALLED_APPS` in `settings.py`**
+6. **Add app to `INSTALLED_APPS` in `settings.py`, and to `PROJECT_APPS` in
+   `apiary/projects.py`** (and to `POSTGRES_SCHEMAS` in `migrate_projects` and
+   the schema check in `k8s/restore.yaml` for a PostgreSQL schema). Its
+   tables are then created live; give it models only for data fixed in code,
+   as demo has.
 
-7. **Add to docker-compose migrations:**
-   ```yaml
-   uv run manage.py migrate newproject --database=newproject_db --verbosity=1 &&
-   ```
-
-8. **Add fixture entry in `apiary/fixtures/projects.yaml`**
+7. **Add fixture entry in `apiary/fixtures/projects.yaml`** (Compose and
+   k8s both migrate it through `migrate_projects`)
 
 ### Creating Models
 

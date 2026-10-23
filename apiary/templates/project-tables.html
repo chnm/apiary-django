@@ -3,89 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apiary projects</title>
+    <title>Apiary</title>
 </head>
 <body>
-    <h1>Apiary projects</h1>
-    <p>Each project is shown three ways: server-rendered tables, the DRF CRUD API fetched with plain JavaScript, and a Ninja dataset charted with D3.</p>
-    <ul>
-        {% for project in projects %}
-            <li><a href="#{{ project.label }}">{{ project.name }}</a> ({{ project.database }})</li>
+    <h1>Apiary</h1>
+    <p>Apiary holds digital humanities projects, each with its own tables. This page shows the {{ project.name }} project's mock data two ways: server-rendered tables, and the DRF CRUD API fetched with plain JavaScript.</p>
+    <p>API docs: <a href="{% url 'api_docs' %}">DRF CRUD</a>.</p>
+    <section id="{{ project.label }}">
+        <h2>{{ project.name }}</h2>
+        <p>Database: {{ project.database }} (<code>{{ project.alias }}</code>)</p>
+
+        <h3>Server-rendered</h3>
+        {% for table in project.tables %}
+            <h4>{{ table.name|capfirst }} <code>{{ table.db_table }}</code></h4>
+            <p>{% if table.count > limit %}First {{ limit }} of {{ table.count }} rows.{% else %}{{ table.count }} row{{ table.count|pluralize }}.{% endif %}</p>
+            {% if table.rows %}
+                <table border="1">
+                    <thead>
+                        <tr>{% for column in table.columns %}<th>{{ column }}</th>{% endfor %}</tr>
+                    </thead>
+                    <tbody>
+                        {% for row in table.rows %}
+                            <tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        {% empty %}
+            <p>No tables.</p>
         {% endfor %}
-    </ul>
-    <p>API docs: <a href="{% url 'api_docs' %}">DRF CRUD</a>, <a href="{% url 'datasets:openapi-view' %}">Ninja datasets</a>.</p>
-    {% for project in projects %}
-        <section id="{{ project.label }}">
-            <h2>{{ project.name }}</h2>
-            <p>Database: {{ project.database }} (<code>{{ project.alias }}</code>)</p>
 
-            <h3>Server-rendered</h3>
-            {% for table in project.tables %}
-                <h4>{{ table.name|capfirst }} <code>{{ table.db_table }}</code></h4>
-                <p>{% if table.count > limit %}First {{ limit }} of {{ table.count }} rows.{% else %}{{ table.count }} row{{ table.count|pluralize }}.{% endif %}</p>
-                {% if table.rows %}
-                    <table border="1">
-                        <thead>
-                            <tr>{% for column in table.columns %}<th>{{ column }}</th>{% endfor %}</tr>
-                        </thead>
-                        <tbody>
-                            {% for row in table.rows %}
-                                <tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                {% endif %}
-            {% empty %}
-                <p>No tables.</p>
-            {% endfor %}
+        <h3>DRF API</h3>
+        <p><a href="{{ project.drf_url }}"><code>{{ project.drf_url }}</code></a>, first three records:</p>
+        <pre data-drf="{{ project.drf_url }}">Loading…</pre>
+    </section>
 
-            <h3>DRF API</h3>
-            <p><a href="{{ project.drf_url }}"><code>{{ project.drf_url }}</code></a>, first three records:</p>
-            <pre data-drf="{{ project.drf_url }}">Loading…</pre>
-
-            <h3>Ninja dataset with D3</h3>
-            <p><a href="{{ project.chart.url }}"><code>{{ project.chart.url }}</code></a></p>
-            <figure data-chart="{{ project.chart.url }}" data-label="{{ project.chart.label }}" data-value="{{ project.chart.value }}">Loading…</figure>
-        </section>
-    {% endfor %}
-
-    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
     <script>
-    async function getJSON(url) {
-        const response = await fetch(url, {headers: {Accept: 'application/json'}});
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-    }
-
     document.querySelectorAll('[data-drf]').forEach(async (el) => {
         try {
-            const page = await getJSON(`${el.dataset.drf}?limit=3`);
+            const response = await fetch(`${el.dataset.drf}?limit=3`, {headers: {Accept: 'application/json'}});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const page = await response.json();
             el.textContent = `${page.count} records\n\n${JSON.stringify(page.results, null, 2)}`;
-        } catch (error) {
-            el.textContent = `Could not load: ${error.message}`;
-        }
-    });
-
-    // Horizontal bars: one per dataset row, labelled by its label fields.
-    document.querySelectorAll('[data-chart]').forEach(async (el) => {
-        try {
-            const rows = await getJSON(el.dataset.chart);
-            const labels = el.dataset.label.split(',');
-            const value = el.dataset.value;
-            const bar = 16, gap = 4, left = 240, width = 720;
-            const x = d3.scaleLinear().domain([0, d3.max(rows, (d) => d[value]) || 1]).range([0, width - left - 80]);
-            el.textContent = '';
-            const svg = d3.select(el).append('svg')
-                .attr('width', width).attr('height', rows.length * (bar + gap))
-                .attr('font-family', 'sans-serif').attr('font-size', 12)
-                .attr('role', 'img').attr('aria-label', `${value} per ${labels.join(' and ')}`);
-            const row = svg.selectAll('g').data(rows).join('g')
-                .attr('transform', (d, i) => `translate(0,${i * (bar + gap)})`);
-            row.append('text').attr('x', left - 6).attr('y', bar - 4).attr('text-anchor', 'end')
-                .text((d) => labels.map((l) => d[l]).join(' · '));
-            row.append('rect').attr('x', left).attr('height', bar).attr('width', (d) => x(d[value])).attr('fill', 'steelblue');
-            row.append('text').attr('x', (d) => left + x(d[value]) + 4).attr('y', bar - 4)
-                .text((d) => d3.format(',')(d[value]));
         } catch (error) {
             el.textContent = `Could not load: ${error.message}`;
         }

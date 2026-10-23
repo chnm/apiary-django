@@ -3,10 +3,9 @@ Static sites, each on its own host: <name>.SITES_DOMAIN (sites.rrchnm.org).
 Names are unique across projects.
 
 Files live in private storage under each version's prefix. Tools write into
-the site's draft version; publishing captures its datasets alongside a data
-snapshot (apiary.projectdata) from the same moment, then makes the draft the
-live version. Published versions never change, so rolling back is pointing
-the site at an earlier one.
+the site's draft version; publishing makes the draft the live version.
+Published versions never change, so rolling back is pointing the site at an
+earlier one. Data a page shows is written into it as files.
 
 Pages are untrusted HTML, so they are served only on their own host, never
 the app's, and with the ADR 0050 headers for agent-written pages: the CSP
@@ -17,19 +16,16 @@ import hashlib
 import posixpath
 import re
 import zipfile
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.db import transaction
 from django.http import FileResponse, Http404
-from django.test import RequestFactory
-from django.urls import Resolver404, resolve
 from django.utils import timezone
 
 from apiary import projectdata
-from apiary.views import PROJECT_APPS
+from apiary.projects import PROJECT_APPS
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
@@ -128,7 +124,7 @@ def draft(site, *, user=None):
         return latest
     version = SiteVersion.objects.create(
         site=site, number=(latest.number + 1) if latest else 1, created_by=user,
-        files=dict(latest.files) if latest else {}, datasets=dict(latest.datasets) if latest else {},
+        files=dict(latest.files) if latest else {},
     )
     storage = storages["default"]
     for path in version.files:
@@ -158,14 +154,13 @@ def put_files(site, files, *, user=None):
 
 def delete_files(site, paths, *, user=None):
     version = draft(site, user=user)
-    missing = [path for path in paths if path not in version.files and path not in version.datasets]
+    missing = [path for path in paths if path not in version.files]
     if missing:
         raise SiteError(f"Not in the draft: {', '.join(missing)}.")
     for path in paths:
         version.files.pop(path, None)
-        version.datasets.pop(path, None)
         storages["default"].delete(version.prefix + path)
-    version.save(update_fields=["files", "datasets"])
+    version.save(update_fields=["files"])
     return version
 
 
@@ -211,7 +206,7 @@ def delete_site(site):
     Delete the site, its versions and all their files, and the snapshots taken
     to publish it. Returns those snapshots' descriptions.
     """
-    snapshots = publish_snapshots(site)
+    snapshots = publish_snapshots(site)  # from when sites froze datasets
     storage = storages["default"]
     for version in site.versions.all():
         for path in version.files:
@@ -223,64 +218,13 @@ def delete_site(site):
         projectdata.delete_snapshot(snapshot)
     return deleted
 
-def dataset_url(project, dataset, params=None):
-    url = f"/api/{project}/v1/datasets/{dataset}/"
-    try:
-        match = resolve(url)
-    except Resolver404:
-        match = None
-    if match is None or match.namespace != "datasets":
-        raise SiteError(f"No dataset {dataset!r} in {project}; list_datasets shows them.")
-    return f"{url}?{urlencode(params)}" if params else url
-
-
-def attach_dataset(site, dataset, *, params=None, path=None, user=None):
-    """Capture a dataset into the site as JSON each time it is published."""
-    url = dataset_url(site.project, dataset, params)
-    path = path or f"data/{dataset}.json"
-    check_path(path)
-    if not path.endswith(".json"):
-        raise SiteError("Dataset files are JSON: give the path a .json name.")
-    version = draft(site, user=user)
-    version.datasets[path] = url
-    version.files.pop(path, None)
-    version.save(update_fields=["files", "datasets"])
-    return version
-
-
-def read_dataset(url, user):
-    """
-    Run the dataset's API view with the publisher's own permissions, so a page
-    holds only what its publisher could read. In-process, inside the caller's
-    consistent read.
-    """
-    request = RequestFactory().get(url)
-    request.user = user
-    match = resolve(request.path)
-    response = match.func(request, *match.args, **match.kwargs)
-    if response.status_code != 200:
-        raise SiteError(f"{url} answered {response.status_code}: {response.content.decode()[:200]}")
-    return response.content
-
-
 def publish(site, *, user):
     version = draft(site, user=user)
     if "index.html" not in version.files:
         raise SiteError("A site needs an index.html to publish.")
-    snapshot = None
-    if version.datasets:
-        def capture(alias):
-            return {path: read_dataset(url, user) for path, url in version.datasets.items()}
-
-        snapshot, captured = projectdata.take_snapshot(
-            site.project, kind="site", user=user, label=f"{site} v{version.number}", during=capture)
-        for path, data in captured.items():
-            write(version.prefix + path, data)
-            version.files[path] = entry(path, data)
     with transaction.atomic():
         version.published_at = timezone.now()
-        version.data_snapshot = snapshot
-        version.save(update_fields=["files", "published_at", "data_snapshot"])
+        version.save(update_fields=["published_at"])
         site.live_version = version
         site.save(update_fields=["live_version"])
     return version
@@ -307,8 +251,7 @@ def describe(site):
         "url": site_url(site), "live_version": live.number if live else None,
         "versions": [
             {"number": v.number, "published_at": v.published_at.isoformat() if v.published_at else None,
-             "files": sorted(v.files), "datasets": v.datasets,
-             "data_snapshot": v.data_snapshot_id}
+             "files": sorted(v.files)}
             for v in site.versions.all()
         ],
     }

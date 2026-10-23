@@ -69,6 +69,10 @@ class Project(BaseModel):
         return f"{self.app_label}: {self.name} - {self.description}"
 
 
+def default_scopes():
+    return ["mcp:read"]
+
+
 class APIToken(BaseModel):
     """
     A bearer token for a user's AI agent, for /mcp. Only its SHA-256 digest
@@ -86,6 +90,7 @@ class APIToken(BaseModel):
     expires_at = models.DateTimeField(null=True, blank=True, help_text="Leave empty for no expiry.")
     last_used_at = models.DateTimeField(null=True, blank=True, editable=False)
     revoked_at = models.DateTimeField(null=True, blank=True, editable=False)
+    scopes = models.JSONField(default=default_scopes, help_text="What it may do over MCP (apiary.mcp_oauth.SCOPES).")
 
     class Meta:
         db_table_comment = "Bearer tokens for users' AI agents"
@@ -209,6 +214,7 @@ class DataSnapshot(BaseModel):
         ("manual", "Manual"),
         ("pre-restore", "Before a restore"),
         ("pre-reset", "Before a reset"),
+        ("pre-change", "Before a change"),
         ("site", "Site publish"),
         ("imported", "Imported"),
     ]
@@ -224,6 +230,7 @@ class DataSnapshot(BaseModel):
                                    related_name="+")
     row_counts = models.JSONField(default=dict)
     migrations = models.JSONField(default=list, help_text="The project's applied migrations when taken.")
+    schema = models.JSONField(default=list, blank=True, help_text="The project's live table definitions when taken.")
     sha256 = models.CharField(max_length=64)
     size = models.PositiveBigIntegerField()
 
@@ -248,9 +255,9 @@ class DataSnapshot(BaseModel):
 
     def manifest(self):
         return {
-            "format": 1, "id": self.pk, "key": str(self.key), "project": self.project, "kind": self.kind, "label": self.label,
+            "format": 2, "id": self.pk, "key": str(self.key), "project": self.project, "kind": self.kind, "label": self.label,
             "created_at": self.created_at.isoformat(), "created_by": getattr(self.created_by, "username", None),
-            "row_counts": self.row_counts, "migrations": self.migrations,
+            "row_counts": self.row_counts, "migrations": self.migrations, "schema": self.schema,
             "data": {"path": "data.json.gz", "format": "django-json+gzip", "sha256": self.sha256, "size": self.size},
         }
 
@@ -286,10 +293,9 @@ class SiteVersion(BaseModel):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                    related_name="+")
     files = models.JSONField(default=dict, help_text="path -> {size, sha256, content_type}")
-    datasets = models.JSONField(default=dict, help_text="path -> dataset URL, captured when published")
     published_at = models.DateTimeField(null=True, blank=True)
     data_snapshot = models.ForeignKey(DataSnapshot, null=True, blank=True, on_delete=models.SET_NULL,
-                                      related_name="+", help_text="The project data its datasets were read from.")
+                                      related_name="+", help_text="Versions published with datasets recorded the data they read.")
 
     class Meta:
         db_table_comment = "Versions of static sites; published ones are immutable"
@@ -303,3 +309,54 @@ class SiteVersion(BaseModel):
     def prefix(self):
         return f"sites/{self.site.project}/{self.site.key}/v{self.number}/"
 
+
+
+class Change(BaseModel):
+    """
+    One change to a project's tables or records, proposed and applied through
+    MCP, the API or the admin (apiary.changes): the audit trail of who changed
+    what, when and why, and how to undo it. Never pruned.
+    """
+    KINDS = [("schema", "Tables"), ("records", "Records")]
+    STATUSES = [
+        ("proposed", "Proposed"),
+        ("applied", "Applied"),
+        ("rejected", "Rejected"),
+        ("failed", "Failed"),
+        ("reverted", "Reverted"),
+    ]
+
+    project = models.CharField(max_length=50)
+    kind = models.CharField(max_length=10, choices=KINDS)
+    status = models.CharField(max_length=10, choices=STATUSES, default="proposed")
+    summary = models.CharField(max_length=300)
+    reason = models.TextField(blank=True, help_text="Why, in the proposer's words.")
+    # The change itself: schema operations, or one records operation.
+    operations = models.JSONField(default=list)
+    # What applying would do, shown before it is applied: effects, the SQL,
+    # the rows affected with their values at the time.
+    preview = models.JSONField(default=dict)
+    # Records: the rows as they were before and after, to verify and undo it.
+    before = models.JSONField(default=list, blank=True)
+    after = models.JSONField(default=list, blank=True)
+    proposed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    proposed_via = models.CharField(max_length=200, blank=True, help_text="The MCP client, API or admin.")
+    proposed_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    decided_via = models.CharField(max_length=200, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    schema_version = models.PositiveIntegerField(null=True, blank=True, help_text="Tables: the version it produced.")
+    snapshot = models.ForeignKey(DataSnapshot, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                                 help_text="The project's data just before it was applied.")
+    reverts = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="reverted_by")
+    error = models.TextField(blank=True)
+
+    class Meta:
+        db_table_comment = "Audit trail of changes to project tables and records"
+        ordering = ["-proposed_at"]
+        indexes = [models.Index(fields=["project", "status"])]
+
+    def __str__(self):
+        return f"#{self.pk} {self.project}: {self.summary}"

@@ -1,104 +1,91 @@
-from unittest.mock import MagicMock
-
-from django.apps import apps
-from django.contrib.auth.models import AnonymousUser
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.contrib.auth.models import Group, User
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import resolve
-from ninja.testing import TestClient
-from rest_framework.request import Request
 
-from apiary.api import crud, datasets
-from apiary.api.permissions import ModelPermissions
-from apiary.views import PROJECT_APPS
-from bom.models import MortalityBill
-from pinkertons.models import Activity, Location
+from apiary import changes
+from apiary.live.testing import drop_live_tables
+from apiary.models import Change
+from apiary.projects import code_models, has_role, role
+from demo.models import MortalityBill
 
-
-def user(*perms, modules=()):
-    return MagicMock(
-        is_authenticated=True, is_active=True,
-        has_perms=lambda wanted: set(wanted) <= set(perms),
-        has_module_perms=lambda label: label in modules,
-    )
+ALL = {"default", "demo_db", "bom_db", "connthreads_db", "mappingviolence_db", "relec_db", "pinkertons_db"}
 
 
-class ApiRoutingTests(SimpleTestCase):
-    def test_every_project_model_gets_crud_under_its_project(self):
-        for label in PROJECT_APPS:
-            for model in apps.get_app_config(label).get_models():
-                # A model named "datasets" would shadow the project's Ninja routes.
-                self.assertNotEqual(model._meta.model_name, "datasets")
-                for path in (f"/api/{label}/v1/{model._meta.model_name}/",
-                             f"/api/{label}/v1/{model._meta.model_name}/1/"):
-                    self.assertEqual(resolve(path).func.cls.queryset.model, model, path)
-
-    def test_every_dataset_lives_under_its_project(self):
-        paths = datasets.api.get_openapi_schema()["paths"]
-        self.assertTrue(paths)
-        for path in paths:
-            self.assertRegex(path, rf"^/api/({'|'.join(PROJECT_APPS)})/v1/datasets/[a-z-]+/$")
-            self.assertEqual(resolve(path).namespace, "datasets", path)
-
-    def test_crud_reads_need_the_view_permission_and_writes_their_own(self):
-        # A plain object: on a MagicMock, DRF reads _ignore_model_permissions as truthy.
-        view = type("View", (), {"queryset": MortalityBill.objects.all()})()
-        factory = RequestFactory()
-
-        def allowed(method, who):
-            request = Request(getattr(factory, method)("/"))
-            request.user = who
-            return ModelPermissions().has_permission(request, view)
-
-        self.assertFalse(allowed("get", AnonymousUser()))
-        self.assertFalse(allowed("get", user()))
-        self.assertTrue(allowed("get", user("bom.view_mortalitybill")))
-        self.assertFalse(allowed("post", user("bom.view_mortalitybill")))
-        self.assertTrue(allowed("post", user("bom.add_mortalitybill")))
-        self.assertFalse(allowed("delete", user("bom.view_mortalitybill", "bom.change_mortalitybill")))
+def member(name, project, role_name, **fields):
+    user = User.objects.create_user(name, **fields)
+    group, _ = Group.objects.get_or_create(name=f"{project}-{role_name}")
+    user.groups.add(group)
+    return user
 
 
-class DatasetTests(TestCase):
-    # Django sets every alias's test database to depend on default.
-    databases = {"default", "bom_db", "pinkertons_db"}
+class RoleTests(TestCase):
+    def test_roles_come_from_project_groups_and_include_lesser_ones(self):
+        editor = member("editor", "bom", "editor")
+        self.assertEqual(role(editor, "bom"), "editor")
+        self.assertTrue(has_role(editor, "bom", "viewer"))
+        self.assertFalse(has_role(editor, "bom", "admin"))
+        self.assertIsNone(role(editor, "relec"))
+        self.assertEqual(role(User.objects.create_superuser("root"), "relec"), "admin")
+        editor.is_active = False
+        self.assertIsNone(role(editor, "bom"))
 
-    @classmethod
-    def setUpTestData(cls):
-        MortalityBill.objects.bulk_create([
-            MortalityBill(year=1665, type="Plague", count=10),
-            MortalityBill(year=1665, type="Plague", count=5),
-            MortalityBill(year=1666, type="Fever", count=3),
-        ])
-        here = Location.objects.create(location_name="Bank", latitude=40.7, longitude=-73.9)
-        nowhere = Location.objects.create(location_name="Unmapped")
-        Activity.objects.create(investigation="nyc", date="1934-09-22", activity="Surveillance", location=here)
-        Activity.objects.create(investigation="nyc", date="1934-09-29", activity="Shadowing", location=nowhere)
-        Activity.objects.create(investigation="hobart", date="1936-02-21", activity="Shadowing")
+
+class CodeTableApiTests(TestCase):
+    databases = {"default", "demo_db"}
+
+    def test_every_code_model_gets_crud_under_its_project(self):
+        for name, model in code_models("demo").items():
+            for path in (f"/api/demo/v1/{name}/", f"/api/demo/v1/{name}/1/"):
+                self.assertEqual(resolve(path).func.cls.model, model, path)
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_viewers_read_editors_write_admins_delete_and_writes_are_recorded(self):
+        bill = MortalityBill.objects.create(year=1665, type="Plague", count=10)
+        url = "/api/demo/v1/mortalitybill/"
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(member("viewer", "demo", "viewer"))
+        self.assertEqual(self.client.get(url).json()["count"], 1)
+        self.assertEqual(self.client.post(url, {"year": 1666, "type": "Fever", "count": 3}).status_code, 403)
+
+        editor = member("editor", "demo", "editor")
+        self.client.force_login(editor)
+        self.assertEqual(self.client.post(url, {"year": 1666, "type": "Fever", "count": 3}).status_code, 201)
+        self.assertEqual(self.client.delete(f"{url}{bill.pk}/").status_code, 403)
+        self.client.force_login(member("admin", "demo", "admin"))
+        self.assertEqual(self.client.delete(f"{url}{bill.pk}/").status_code, 204)
+
+        recorded = list(Change.objects.order_by("pk").values_list("summary", "proposed_via", "status"))
+        self.assertEqual(recorded, [("Add 1 rows to mortalitybill", "API", "applied"),
+                                    ("Delete 1 rows in mortalitybill", "API", "applied")])
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class LiveTableApiTests(TransactionTestCase):
+    databases = ALL
 
     def setUp(self):
-        self.client = TestClient(datasets.api)
+        self.addCleanup(drop_live_tables)
+        self.admin = member("owner", "relec", "admin", is_staff=True)
+        proposal = changes.propose_schema(self.admin, "relec", [{"op": "create_table", "table": "congregations", "columns": [
+            {"name": "name", "type": "text", "required": True}, {"name": "members", "type": "integer"}]}],
+            via="test", reason="Census schedules")
+        changes.apply(proposal, self.admin, via="test")
 
-    def test_datasets_need_a_permission_in_their_project(self):
-        path = "/bom/v1/datasets/deaths-by-year/"
-        self.assertEqual(self.client.get(path).status_code, 401)
-        self.assertEqual(self.client.get(path, user=user(modules={"relec"})).status_code, 401)
-        self.assertEqual(self.client.get(path, user=user(modules={"bom"})).status_code, 200)
+    def test_live_tables_get_crud_that_follows_their_schema(self):
+        url = "/api/relec/v1/congregations/"
+        self.client.force_login(member("editor", "relec", "editor"))
+        created = self.client.post(url, {"name": "First Baptist", "members": 120}, content_type="application/json")
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get(url).json()["results"], [{"id": created.json()["id"], "name": "First Baptist", "members": 120}])
+        self.assertEqual(self.client.post(url, {"members": 5}, content_type="application/json").status_code, 400)
+        self.assertEqual(self.client.get("/api/relec/v1/nope/").status_code, 404)
+        self.assertEqual(self.client.get("/api/nope/v1/congregations/").status_code, 404)
 
-    def test_time_series_sums_per_year_and_type_with_filters(self):
-        bom = user(modules={"bom"})
-        self.assertEqual(self.client.get("/bom/v1/datasets/deaths-by-year/", user=bom).json(), [
-            {"year": 1665, "type": "Plague", "deaths": 15},
-            {"year": 1666, "type": "Fever", "deaths": 3},
-        ])
-        self.assertEqual(
-            self.client.get("/bom/v1/datasets/deaths-by-year/?start=1666", user=bom).json(),
-            [{"year": 1666, "type": "Fever", "deaths": 3}],
-        )
+        changes.apply(changes.propose_schema(self.admin, "relec", [
+            {"op": "add_column", "table": "congregations", "column": {"name": "state", "type": "text", "max_length": 2}}],
+            via="test", reason="Map them"), self.admin, via="test")
+        self.assertIn("state", self.client.get(url).json()["results"][0])
 
-    def test_monthly_counts_and_joined_points(self):
-        pinkertons = user(modules={"pinkertons"})
-        self.assertEqual(self.client.get("/pinkertons/v1/datasets/activities-by-month/", user=pinkertons).json(), [
-            {"month": "1934-09-01", "investigation": "nyc", "activities": 2},
-            {"month": "1936-02-01", "investigation": "hobart", "activities": 1},
-        ])
-        points = self.client.get("/pinkertons/v1/datasets/activity-points/", user=pinkertons).json()
-        self.assertEqual([(p["location"], p["latitude"]) for p in points], [("Bank", 40.7)])
+    def test_live_tables_need_a_role_in_their_project(self):
+        self.client.force_login(member("other", "bom", "admin"))
+        self.assertEqual(self.client.get("/api/relec/v1/congregations/").status_code, 403)

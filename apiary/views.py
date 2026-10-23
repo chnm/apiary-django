@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from django.apps import apps
 from django.contrib import admin
 from django.core import signing
-from django.db import connections, router
+from django.db import connections
 from django.urls import reverse
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
@@ -24,13 +24,13 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from apiary import mcp_oauth
+from apiary.projects import PROJECT_APPS, code_models, has_role, project_alias
 from apiary.decorators import superuser_required
 from apiary.models import OAuthClient
 from apiary.export import write_project_zip
 from apiary.status import snapshot
 
 # Whitelist of allowed management commands with their configurations
-PROJECT_APPS = ('bom', 'connthreads', 'mappingviolence', 'relec', 'pinkertons')
 
 ALLOWED_COMMANDS = {
     'test_command': {
@@ -56,8 +56,9 @@ ALLOWED_COMMANDS = {
     'reset_project_data': {
         'name': 'Reset Project Data',
         'description': (
-            "Delete every row in a project's tables and reload its fixtures. "
-            'Cannot be undone, except from the nightly backup. Type the project name to confirm.'
+            "Delete every row in a project's tables (live tables keep their columns) and reload its "
+            "fixtures, if it has any (demo). Snapshots first, so restoring that snapshot undoes it. "
+            'Type the project name to confirm.'
         ),
         'args': [
             {'name': 'project', 'type': 'select', 'choices': PROJECT_APPS, 'required': True},
@@ -102,58 +103,41 @@ ALLOWED_COMMANDS = {
 }
 
 ROW_LIMIT = 100
-# Root page D3 sample per project: Ninja dataset, label fields, value field.
-SAMPLE_CHARTS = {
-    'bom': ('deaths_by_year', ['year', 'type'], 'deaths'),
-    'connthreads': ('circulation_by_year', ['year', 'type'], 'circulation'),
-    'mappingviolence': ('testimonies_by_month', ['month', 'crime'], 'testimonies'),
-    'relec': ('denominations_by_family', ['family'], 'denominations'),
-    'pinkertons': ('activities_by_month', ['month', 'investigation'], 'activities'),
-}
+DEMO = 'demo'
 
 
 def project_tables_page(request):
     """
-    Show every project model as a plain table, capped at ROW_LIMIT rows each,
-    with its database backend and client-side DRF and Ninja API samples.
+    Show the demo project's tables as plain tables, capped at ROW_LIMIT rows
+    each, with its database backend and a client-side DRF API sample. The
+    other projects hold real data and are never shown here.
 
-    Public: anyone can read the tables. The API samples use the visitor's own
-    permissions, so they load only for users with access to the project.
+    Public: anyone can read the demo tables. The API sample uses the
+    visitor's own permissions, so it loads only for users with demo access.
     """
-    projects = []
-    for label in PROJECT_APPS:
-        config = apps.get_app_config(label)
-        tables = []
-        for model in config.get_models():
-            fields = model._meta.concrete_fields
-            queryset = model.objects.order_by('pk')
-            tables.append({
-                'name': model._meta.verbose_name_plural,
-                'db_table': model._meta.db_table,
-                'columns': [field.verbose_name for field in fields],
-                'rows': [
-                    [field.value_from_object(obj) for field in fields]
-                    for obj in queryset[:ROW_LIMIT]
-                ],
-                'count': queryset.count(),
-            })
-        first = next(config.get_models())
-        alias = router.db_for_read(first)
-        dataset, label_fields, value_field = SAMPLE_CHARTS[label]
-        projects.append({
-            'label': label,
-            'name': config.verbose_name,
-            'database': connections[alias].display_name,
-            'alias': alias,
-            'tables': tables,
-            'drf_url': reverse(f'{label}-{first._meta.model_name}-list'),
-            'chart': {
-                'url': reverse(f'datasets:{label}_{dataset}'),
-                'label': ','.join(label_fields),
-                'value': value_field,
-            },
+    config = apps.get_app_config(DEMO)
+    tables = []
+    for name, model in code_models(DEMO).items():
+        fields = model._meta.concrete_fields
+        queryset = model.objects.order_by('pk')
+        tables.append({
+            'name': model._meta.verbose_name_plural,
+            'db_table': model._meta.db_table,
+            'columns': [field.verbose_name for field in fields],
+            'rows': [[field.value_from_object(obj) for field in fields] for obj in queryset[:ROW_LIMIT]],
+            'count': queryset.count(),
         })
-    return render(request, 'project-tables.html', {'projects': projects, 'limit': ROW_LIMIT})
+    alias = project_alias(DEMO)
+    first = next(iter(code_models(DEMO)))
+    project = {
+        'label': DEMO,
+        'name': config.verbose_name,
+        'database': connections[alias].display_name,
+        'alias': alias,
+        'tables': tables,
+        'drf_url': reverse(f'{DEMO}-{first}-list'),
+    }
+    return render(request, 'project-tables.html', {'project': project, 'limit': ROW_LIMIT})
 
 
 @staff_member_required
@@ -279,12 +263,14 @@ MEDIA_STORAGES = {"public": "public", "private": "default"}
 def media(request, visibility, path):
     """
     Serve a stored file. Public files are open to anyone; a private file needs a
-    permission in the app named by its first path segment (e.g. private/bom/...).
+    role in the project named by its first path segment (e.g. private/bom/...),
+    or for other apps a permission there.
     """
     if visibility == "private":
         if not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
-        if not request.user.has_module_perms(path.split("/", 1)[0]):
+        app = path.split("/", 1)[0]
+        if not (has_role(request.user, app, "viewer") if app in PROJECT_APPS else request.user.has_module_perms(app)):
             raise PermissionDenied
     storage = storages[MEDIA_STORAGES[visibility]]
     try:
@@ -357,7 +343,8 @@ def mcp_authorize(request):
     client = get_object_or_404(OAuthClient, client_id=oauth_request['client_id'])
     if request.method == 'POST':
         if 'approve' in request.POST:
-            return ClientRedirect(mcp_oauth.approve(request.user, client, oauth_request))
+            scopes = request.POST.getlist('scope')
+            return ClientRedirect(mcp_oauth.approve(request.user, client, oauth_request, scopes))
         return ClientRedirect(mcp_oauth.deny(oauth_request))
     return render(request, 'admin/apiary/mcp_authorize.html', {
         **admin.site.each_context(request),
@@ -367,4 +354,9 @@ def mcp_authorize(request):
         'redirect_to': urlsplit(oauth_request['redirect_uri']),
         'mcp_url': mcp_oauth.resource_url(),
         'request_token': request.GET.get('request'),
+        'scopes': [
+            {'name': name, 'description': text,
+             'checked': name == 'mcp:read' or name in (oauth_request.get('scopes') or [])}
+            for name, text in mcp_oauth.SCOPES.items()
+        ],
     })

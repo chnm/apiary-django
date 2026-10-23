@@ -7,7 +7,7 @@ from apiary.mcp_testing import mcp_client
 
 from apiary import projectdata, sites
 from apiary.models import APIToken, DataSnapshot, Site
-from bom.models import MortalityBill
+from demo.models import MortalityBill
 
 SITES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/",
          "ALLOWED_HOSTS": ["testserver", ".sites.test", "localhost"]}
@@ -15,12 +15,12 @@ SITES = {"SITES_DOMAIN": "sites.test", "SITES_URL": "https://{name}.sites.test/"
 
 @override_settings(**SITES)
 class SiteTests(TestCase):
-    databases = {"default", "bom_db"}
+    databases = {"default", "demo_db"}
 
     def setUp(self):
         self.staff = User.objects.create_superuser("editor", password="x")
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
-        self.site = sites.create_site("bom", "plague", title="Plague", user=self.staff)
+        self.site = sites.create_site("demo", "plague", title="Plague", user=self.staff)
 
     def get(self, path, host="plague.sites.test"):
         return self.client.get(path, HTTP_HOST=host)
@@ -28,15 +28,14 @@ class SiteTests(TestCase):
     def body(self, response):
         return b"".join(response.streaming_content) if response.streaming else response.content
 
-    def test_publish_serves_files_and_a_frozen_dataset(self):
-        sites.put_files(self.site, {"index.html": b"<h1>Plague</h1>", "css/site.css": b"h1{}"}, user=self.staff)
-        sites.attach_dataset(self.site, "deaths-by-year", params={"type": "Plague"}, user=self.staff)
+    def test_publish_serves_files(self):
+        sites.put_files(self.site, {"index.html": b"<h1>Plague</h1>", "css/site.css": b"h1{}",
+                                    "data/bills.json": b'[{"year": 1665}]'}, user=self.staff)
         version = sites.publish(self.site, user=self.staff)
 
         self.assertEqual(version.number, 1)
-        self.assertEqual(sorted(version.files), ["css/site.css", "data/deaths-by-year.json", "index.html"])
-        snapshot = version.data_snapshot
-        self.assertEqual((snapshot.kind, snapshot.row_counts), ("site", {"mortalitybill": 1}))
+        self.assertEqual(sorted(version.files), ["css/site.css", "data/bills.json", "index.html"])
+        self.assertIsNone(version.data_snapshot)
 
         response = self.get("/")
         self.assertEqual((response.status_code, self.body(response)), (200, b"<h1>Plague</h1>"))
@@ -44,13 +43,7 @@ class SiteTests(TestCase):
         self.assertIn("sandbox allow-scripts", response["Content-Security-Policy"])
         self.assertIn("connect-src http://plague.sites.test;", response["Content-Security-Policy"])
         self.assertEqual(response["Access-Control-Allow-Origin"], "*")
-        data = json.loads(self.body(self.get("/data/deaths-by-year.json")))
-        self.assertEqual(data, [{"year": 1665, "type": "Plague", "deaths": 10}])
-
-        # Frozen: later changes to the data reach the page only on republishing.
-        MortalityBill.objects.create(year=1666, type="Plague", count=5)
-        self.assertEqual(len(json.loads(self.body(self.get("/data/deaths-by-year.json")))), 1)
-
+        self.assertEqual(json.loads(self.body(self.get("/data/bills.json"))), [{"year": 1665}])
 
     def test_versions_and_rollback(self):
         sites.put_files(self.site, {"index.html": b"one"}, user=self.staff)
@@ -102,37 +95,27 @@ class SiteTests(TestCase):
                 sites.put_files(self.site, files, user=self.staff)
         with self.assertRaisesMessage(sites.SiteError, "needs an index.html"):
             sites.publish(self.site, user=self.staff)
-        with self.assertRaisesMessage(sites.SiteError, "No dataset 'nope'"):
-            sites.attach_dataset(self.site, "nope", user=self.staff)
-        with self.assertRaisesMessage(sites.SiteError, "taken (by bom/plague): names are unique across projects"):
+        with self.assertRaisesMessage(sites.SiteError, "taken (by demo/plague): names are unique across projects"):
             sites.create_site("relec", "plague")
         for name in ("Bad Name", "-edge", "edge-", "a.b", "x" * 51):
             with self.assertRaisesMessage(sites.SiteError, "Site names are"):
-                sites.create_site("bom", name)
+                sites.create_site("demo", name)
         with self.assertRaisesMessage(sites.SiteError, "'www' is reserved"):
-            sites.create_site("bom", "www")
-
-    def test_datasets_use_the_publishers_permissions(self):
-        outsider = User.objects.create_user("outsider", is_staff=True)
-        sites.put_files(self.site, {"index.html": b"x"}, user=outsider)
-        sites.attach_dataset(self.site, "deaths-by-year", user=outsider)
-        with self.assertRaisesMessage(sites.SiteError, "answered 401"):
-            sites.publish(self.site, user=outsider)
-        self.assertIsNone(Site.objects.get().live_version)
+            sites.create_site("demo", "www")
 
 
 # Transactional: the MCP app works on its own thread (see test_mcp).
 @override_settings(**SITES)
 class SiteToolTests(TransactionTestCase):
-    databases = {"default", "bom_db"}
+    databases = {"default", "demo_db"}
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.mcp_client = mcp_client()
 
-    def token(self, user):
-        token = APIToken(user=user, name="agent")
+    def token(self, user, scopes=("mcp:read", "mcp:write")):
+        token = APIToken(user=user, name="agent", scopes=list(scopes))
         secret = token.generate()
         token.save()
         return secret
@@ -149,34 +132,35 @@ class SiteToolTests(TransactionTestCase):
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
         staff = self.token(User.objects.create_superuser("editor", password="x"))
 
-        error, datasets = self.call(staff, "list_datasets", project="bom")
-        self.assertEqual(datasets["datasets"][0]["name"], "deaths-by-year")
-        self.assertFalse(self.call(staff, "create_site", project="bom", name="plague")[0])
-        error, result = self.call(staff, "put_files", project="bom", site="plague", files=[
+        self.assertFalse(self.call(staff, "create_site", project="demo", name="plague")[0])
+        error, result = self.call(staff, "put_files", project="demo", site="plague", files=[
             {"path": "index.html", "content": "<h1>Plague</h1>"},
             {"path": "dot.png", "content": base64.b64encode(b"\x89PNG").decode(), "encoding": "base64"},
         ])
         self.assertEqual((error, result["files"]), (False, ["dot.png", "index.html"]))
-        self.assertFalse(self.call(staff, "attach_dataset", project="bom", site="plague", dataset="deaths-by-year")[0])
-        error, published = self.call(staff, "publish_site", project="bom", site="plague")
+        error, published = self.call(staff, "publish_site", project="demo", site="plague")
         self.assertFalse(error, published)
         self.assertEqual(published["url"], "https://plague.sites.test/")
-        self.assertEqual(DataSnapshot.objects.get().pk, published["data_snapshot"])
 
-        error, sites = self.call(staff, "list_sites", project="bom")
+        error, sites = self.call(staff, "list_sites", project="demo")
         self.assertEqual(sites["sites"][0]["live_version"], 1)
 
-    def test_only_staff_publish(self):
+    def test_only_staff_with_the_write_scope_publish(self):
         reader = self.token(User.objects.create_user("reader"))
-        error, message = self.call(reader, "create_site", project="bom", name="plague")
+        error, message = self.call(reader, "create_site", project="demo", name="plague")
         self.assertTrue(error)
         self.assertIn("needs a staff account", message)
         self.assertFalse(self.call(reader, "list_sites")[0])  # reading stays open
 
+        read_only = self.token(User.objects.create_superuser("root", password="x"), scopes=["mcp:read"])
+        error, message = self.call(read_only, "create_site", project="demo", name="plague")
+        self.assertTrue(error)
+        self.assertIn("lacks the mcp:write scope", message)
+
 
 class SitesNamingMigrationTests(TestCase):
     """0006 moves site files from pages/ to sites/ and renames the snapshot kind."""
-    databases = {"default", "bom_db"}
+    databases = {"default", "demo_db"}
 
     def test_moves_files_and_renames_kind_both_ways(self):
         from importlib import import_module
@@ -188,13 +172,13 @@ class SitesNamingMigrationTests(TestCase):
         from apiary.models import SiteVersion
 
         migration = import_module("apiary.migrations.0006_sites_naming")
-        site = Site.objects.create(project="bom", name="old")
+        site = Site.objects.create(project="demo", name="old")
         version = SiteVersion.objects.create(site=site, number=1, files={"index.html": {}, "css/a.css": {}})
-        old = f"pages/bom/{site.key}/v1/"
+        old = f"pages/demo/{site.key}/v1/"
         storage = storages["default"]
         for path in version.files:
             storage.save(old + path, ContentFile(path.encode()))
-        snapshot, _ = projectdata.take_snapshot("bom", kind="manual")
+        snapshot = projectdata.take_snapshot("demo", kind="manual")
         DataSnapshot.objects.filter(pk=snapshot.pk).update(kind="page")
 
         migration.to_sites(apps, None)

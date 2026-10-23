@@ -203,10 +203,15 @@ patches:
                   args:
                     - |
                       import sqlite3
+                      # The app keeps these in WAL mode, which a reader opens only with
+                      # the -shm file writable: read-write mount, and only read. The
+                      # copies go back to a rollback journal so a read-only mount (the
+                      # restore check) can open them; the app turns WAL on again.
                       for name in ("bom.sqlite3", "pinkertons.sqlite3"):
-                          src = sqlite3.connect(f"file:/data/{name}?mode=ro", uri=True)
+                          src = sqlite3.connect(f"/data/{name}")
                           dst = sqlite3.connect(f"/dump/{name}")
                           src.backup(dst)
+                          dst.execute("PRAGMA journal_mode=DELETE")
                           ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
                           if ok != "ok":
                               raise SystemExit(f"{name} copy failed integrity_check: {ok}")
@@ -222,7 +227,7 @@ patches:
                     requests: { cpu: 50m, memory: 64Mi }
                     limits: { cpu: 500m, memory: 256Mi }
                   volumeMounts:
-                    - { name: sqlite, mountPath: /data, readOnly: true }
+                    - { name: sqlite, mountPath: /data }
                     - { name: dump, mountPath: /dump }
                 - name: bucket
                   image: app

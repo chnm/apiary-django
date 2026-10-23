@@ -7,11 +7,9 @@ from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 
 from apiary.views import ALLOWED_COMMANDS, management_commands_dashboard, run_management_command
-from bom.models import MortalityBill
-from pinkertons.models import Activity, Location
-from relec.models import Denomination, Schedule
+from demo.models import Activity, Location, MortalityBill
 
-DATABASES = {"default", "bom_db", "relec_db", "pinkertons_db"}
+DATABASES = {"default", "demo_db", "bom_db"}
 
 
 def reset(project, **options):
@@ -25,38 +23,35 @@ class ResetProjectDataTests(TestCase):
 
     def test_replaces_the_rows_with_the_fixtures(self):
         MortalityBill.objects.create(year=1900, type="Not a fixture", count=1)
-        output = reset("bom")
+        output = reset("demo")
         self.assertEqual(MortalityBill.objects.count(), 31)
         self.assertFalse(MortalityBill.objects.filter(type="Not a fixture").exists())
         self.assertIn("mortalitybill: 1 -> 31 rows", output)
 
-    def test_loads_every_fixture_of_the_project(self):
-        reset("relec")
-        self.assertEqual((Denomination.objects.count(), Schedule.objects.count()), (40, 30))
-
     def test_related_tables_reset_together(self):
-        reset("pinkertons")
+        reset("demo")
         self.assertEqual((Location.objects.count(), Activity.objects.count()), (30, 40))
-        reset("pinkertons", no_fixtures=True)
+        reset("demo", no_fixtures=True)
         self.assertEqual((Location.objects.count(), Activity.objects.count()), (0, 0))
 
     def test_needs_the_project_name_typed_again(self):
         MortalityBill.objects.create(year=1900, type="Kept", count=1)
-        with self.assertRaisesMessage(CommandError, 'Type the project name "bom" to confirm.'):
-            reset("bom", confirm="relec")
+        with self.assertRaisesMessage(CommandError, 'Type the project name "demo" to confirm.'):
+            reset("demo", confirm="relec")
         self.assertEqual(MortalityBill.objects.count(), 1)
 
     def test_a_failed_load_leaves_the_data_as_it_was(self):
         MortalityBill.objects.create(year=1900, type="Kept", count=1)
         with patch("apiary.management.commands.reset_project_data.call_command", side_effect=RuntimeError("bad fixture")):
             with self.assertRaises(RuntimeError):
-                reset("bom")
+                reset("demo")
         self.assertEqual(list(MortalityBill.objects.values_list("type", flat=True)), ["Kept"])
 
     def test_leaves_other_projects_alone(self):
-        Denomination.objects.create(name="Kept", family="Other")
-        reset("bom")
-        self.assertEqual(Denomination.objects.count(), 1)
+        MortalityBill.objects.create(year=1900, type="Kept", count=1)
+        output = reset("bom")  # no tables in code and no fixtures: nothing to load
+        self.assertIn("No fixtures loaded.", output)
+        self.assertEqual(MortalityBill.objects.count(), 1)
 
 
 class ResetProjectDataDashboardTests(TestCase):
@@ -75,12 +70,12 @@ class ResetProjectDataDashboardTests(TestCase):
         finished = MagicMock(returncode=0, stdout="done", stderr="")
         with patch("apiary.views.subprocess.run", return_value=finished) as run:
             response = run_management_command(self.superuser_request("post", "/apiary/run-command/", {
-                "command": "reset_project_data", "project": "bom", "confirm": "bom",
+                "command": "reset_project_data", "project": "demo", "confirm": "demo",
             }))
         self.assertTrue(json.loads(response.content)["success"])
-        self.assertEqual(run.call_args.args[0][2:], ["reset_project_data", "--project", "bom", "--confirm", "bom"])
+        self.assertEqual(run.call_args.args[0][2:], ["reset_project_data", "--project", "demo", "--confirm", "demo"])
 
         response = run_management_command(self.superuser_request("post", "/apiary/run-command/", {
-            "command": "reset_project_data", "project": "bom",
+            "command": "reset_project_data", "project": "demo",
         }))
         self.assertEqual(response.status_code, 400)
