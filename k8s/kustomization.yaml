@@ -105,6 +105,14 @@ configMapGenerator:
                       # the -shm file writable: read-write mount, and only read. The
                       # copies go back to a rollback journal so a read-only mount (the
                       # restore check) can open them; the app turns WAL on again.
+            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
+            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
+            # because it reads the SQLite files on the node-local sqlite volume.
+            # Its env and envFrom are copied from the app container (replacements).
+                      # The app keeps these in WAL mode, which a reader opens only with
+                      # the -shm file writable: read-write mount, and only read. The
+                      # copies go back to a rollback journal so a read-only mount (the
+                      # restore check) can open them; the app turns WAL on again.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -368,5 +376,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:5a367717fc8f85f4b393e63c9ab57d5353ef8aab0054eea1e62b9c152e2a112f
+- digest: sha256:9f2479932d3eda86470d6e10c2f68bb58a7b2adb066c24ef65c88ceb48f74b3c
   name: oci.rrchnm.internal/rrchnm/apiary-django
