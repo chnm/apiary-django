@@ -34,93 +34,34 @@ configMapGenerator:
     annotations:
       argocd.argoproj.io/sync-wave: "-2"
 
-  # One replica on node-local SQLite: never two writers. Move BOM to PostgreSQL
-  # before scaling horizontally.
-  # Project schemas + the SQLite projects, then the idempotent superuser bootstrap.
-  # 02:45 ET, before the 03:30 canary and forge runs. Also back up the
-  # BOM and Pinkertons SQLite files: SQLite's online backup API on a read-only open (Django's SQLite
-  # backend uses the rollback journal, so a reader needs no -shm file), checked
-  # with integrity_check, using the app's own image.
-# 05:45 ET: after the 02:45 backup, and clear of the canary's 05:15 refresh on
-# the same developer Postgres. The copy holds PostgreSQL only; the SQLite projects are not copied.
-# The component's sanitize.sql covers users, sessions, allauth and the admin
-# log; app tables (relec contributor names included) are copied as-is.
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-                      # The app keeps these in WAL mode, which a reader opens only with
-                      # the -shm file writable: read-write mount, and only read. The
-                      # copies go back to a rollback journal so a read-only mount (the
-                      # restore check) can open them; the app turns WAL on again.
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-                      # The app keeps these in WAL mode, which a reader opens only with
-                      # the -shm file writable: read-write mount, and only read. The
-                      # copies go back to a rollback journal so a read-only mount (the
-                      # restore check) can open them; the app turns WAL on again.
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
-                      # The app keeps these in WAL mode, which a reader opens only with
-                      # the -shm file writable: read-write mount, and only read. The
-                      # copies go back to a rollback journal so a read-only mount (the
-                      # restore check) can open them; the app turns WAL on again.
+# Comments go here, never inside a `patch: |-` body or above a `- patch:`
+# item: CI's `kustomize edit set image` copies `#` lines out of block scalars
+# as new comments on every digest pin, and hoists item comments above
+# `patches:`.
+#
+# app Deployment: one replica (Recreate) on node-local SQLite, never two
+# writers; move BOM to PostgreSQL before scaling horizontally. The mcp
+# container is the read-only MCP for AI agents (apiary/mcp_server.py): the
+# SDK's ASGI app under uvicorn while Django stays on Gunicorn. It shares the
+# pod because it reads the SQLite files on the node-local sqlite volume; its
+# env and envFrom are copied from the app container (replacements).
+#
+# migrate Job: project schemas + the SQLite projects, then the idempotent
+# superuser bootstrap.
+#
+# postgres-backup: 02:45 ET, before the 03:30 canary and forge runs. Also
+# copies the BOM and Pinkertons SQLite files with SQLite's online backup API,
+# checked with integrity_check, using the app's own image. The app keeps
+# them in WAL mode, which a reader opens only with the -shm file writable:
+# read-write mount, and only read. The copies go back to a rollback journal
+# so a read-only mount (the restore check) can open them; the app turns WAL
+# on again.
+#
+# developer-refresh: 05:45 ET, after the 02:45 backup and clear of the
+# canary's 05:15 refresh on the same developer Postgres. The copy holds
+# PostgreSQL only; the SQLite projects are not copied. The component's
+# sanitize.sql covers users, sessions, allauth and the admin log; app tables
+# (relec contributor names included) are copied as-is.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -138,10 +79,6 @@ patches:
                 limits: { cpu: "1", memory: 1Gi }
               volumeMounts:
                 - { name: sqlite, mountPath: /data }
-            # Read-only MCP for AI agents (apiary/mcp_server.py): the SDK's
-            # ASGI app under uvicorn while Django stays on Gunicorn. In this pod
-            # because it reads the SQLite files on the node-local sqlite volume.
-            # Its env and envFrom are copied from the app container (replacements).
             - name: mcp
               image: app
               command: ["uvicorn", "apiary.mcp_server:app", "--host", "0.0.0.0", "--port", "8001",
@@ -227,10 +164,6 @@ patches:
                   args:
                     - |
                       import sqlite3
-                      # The app keeps these in WAL mode, which a reader opens only with
-                      # the -shm file writable: read-write mount, and only read. The
-                      # copies go back to a rollback journal so a read-only mount (the
-                      # restore check) can open them; the app turns WAL on again.
                       for name in ("bom.sqlite3", "pinkertons.sqlite3"):
                           src = sqlite3.connect(f"/data/{name}")
                           dst = sqlite3.connect(f"/dump/{name}")
