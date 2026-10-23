@@ -7,56 +7,52 @@ from django.urls import reverse_lazy
 
 from .settings import *
 
-# Each project's sidebar section: its overview, its models under Data Models
-# (Unfold's nested items, a collapsible list that opens on any of them), and
-# its sites and data snapshots. Links are plain strings: Unfold marks an item
-# active by its link before it calls a link function, so a function link never
-# shows as the current page.
-def project_section(title, label, models):
-    """models: (title, icon, model_name) for each of the project's models."""
+# Each project's sidebar section: its tables (the live tables page; demo's
+# code models nest under Data Models, Unfold's collapsible list that opens on
+# any of them), its change history, sites and data snapshots. Links are plain
+# strings: Unfold marks an item active only when its link is one.
+def project_section(title, label, models=()):
+    """models: (title, icon, model_name) for each of the project's models in code."""
     def member(request):
-        # Any permission in the project, as its viewer, editor and admin groups give.
-        return request.user.has_module_perms(label)
+        from apiary.projects import has_role
+        return has_role(request.user, label, "viewer")
 
     def superuser(request):
         return request.user.is_superuser
 
-    return {
-        "title": title,
-        "separator": True,
-        "collapsible": True,
-        "items": [
-            {"title": "Overview", "icon": "dashboard", "link": f"/admin/{label}/", "permission": member},
-            {
-                "title": "Data Models",
-                "icon": "database",
-                "link": f"/admin/{label}/",
-                "permission": member,
-                "items": [
-                    {"title": model_title, "icon": icon, "link": f"/admin/{label}/{model}/", "permission": member}
-                    for model_title, icon, model in models
-                ],
-            },
-            {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}",
-             "permission": superuser},
-            {"title": "Data Snapshots", "icon": "backup",
-             "link": f"/admin/apiary/datasnapshot/?project__exact={label}", "permission": superuser},
-        ],
-    }
+    items = [{"title": "Tables", "icon": "table_view", "link": f"/admin/apiary/change/tables/{label}/", "permission": member}]
+    if models:
+        items.append({
+            "title": "Data Models",
+            "icon": "database",
+            "link": f"/admin/{label}/",
+            "permission": member,
+            "items": [
+                {"title": model_title, "icon": icon, "link": f"/admin/{label}/{model}/", "permission": member}
+                for model_title, icon, model in models
+            ],
+        })
+    items += [
+        {"title": "Changes", "icon": "history", "link": f"/admin/apiary/change/?project__exact={label}",
+         "permission": superuser},
+        {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}", "permission": superuser},
+        {"title": "Data Snapshots", "icon": "backup",
+         "link": f"/admin/apiary/datasnapshot/?project__exact={label}", "permission": superuser},
+    ]
+    return {"title": title, "separator": True, "collapsible": True, "items": items}
 
 
 PROJECT_SECTIONS = [
-    project_section("Death by Numbers", "bom", [("Bills of Mortality", "skull", "mortalitybill")]),
-    project_section("Connecting Threads", "connthreads", [("Textiles", "checkroom", "textile")]),
-    project_section("Mapping Violence", "mappingviolence", [("Witnesses", "gavel", "witness")]),
-    project_section("Religious Ecologies", "relec", [
-        ("Denominations", "church", "denomination"),
-        ("Schedules", "assignment", "schedule"),
-    ]),
-    project_section("Pinkertons", "pinkertons", [
+    project_section("Demo", "demo", [
+        ("Bills of Mortality", "skull", "mortalitybill"),
         ("Activities", "visibility", "activity"),
         ("Locations", "location_on", "location"),
     ]),
+    project_section("Death by Numbers", "bom"),
+    project_section("Connecting Threads", "connthreads"),
+    project_section("Mapping Violence", "mappingviolence"),
+    project_section("Religious Ecologies", "relec"),
+    project_section("Pinkertons", "pinkertons"),
 ]
 
 
@@ -228,6 +224,12 @@ UNFOLD = {
                         "title": "OAuth Clients",
                         "icon": "apps",
                         "link": "/admin/apiary/oauthclient/",
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": "Changes",
+                        "icon": "history",
+                        "link": "/admin/apiary/change/",
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {

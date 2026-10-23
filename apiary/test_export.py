@@ -11,8 +11,8 @@ from django.test import RequestFactory, TestCase
 
 from apiary.export import write_project_zip
 from apiary.views import export_project
-from bom.models import MortalityBill
-from pinkertons.models import Activity, Location
+from demo.models import MortalityBill
+from demo.models import Activity, Location
 
 
 def export(project):
@@ -26,7 +26,7 @@ def rows(archive, name):
 
 
 class ExportTests(TestCase):
-    databases = {"default", "bom_db", "pinkertons_db"}
+    databases = {"default", "demo_db", "bom_db"}
 
     def test_one_csv_per_table_described_by_a_data_package(self):
         bank = Location.objects.create(location_name="Bank", locality="Manhattan, NYC", latitude=40.7)
@@ -34,12 +34,12 @@ class ExportTests(TestCase):
                                 operative="H. McCabe", activity="Surveillance", location=bank)
         Activity.objects.create(investigation="hobart", activity="Shadowing")
 
-        archive = export("pinkertons")
-        self.assertEqual(sorted(archive.namelist()), ["activity.csv", "datapackage.json", "location.csv"])
+        archive = export("demo")
+        self.assertEqual(sorted(archive.namelist()), ["activity.csv", "datapackage.json", "location.csv", "mortalitybill.csv"])
 
         package = json.loads(archive.read("datapackage.json"))
         self.assertEqual((package["profile"], package["name"], package["title"]),
-                         ("tabular-data-package", "apiary-pinkertons", "Pinkertons"))
+                         ("tabular-data-package", "apiary-demo", "Demo"))
         activity = next(r for r in package["resources"] if r["name"] == "activity")
         # A tabular-data-package requires it of every resource (Frictionless validate).
         self.assertEqual({r["profile"] for r in package["resources"]}, {"tabular-data-resource"})
@@ -62,15 +62,14 @@ class ExportTests(TestCase):
 
     def test_exports_only_that_project(self):
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
-        archive = export("bom")
-        self.assertEqual(sorted(archive.namelist()), ["datapackage.json", "mortalitybill.csv"])
-        self.assertEqual(rows(archive, "mortalitybill.csv"), [["id", "year", "type", "count"], ["1", "1665", "Plague", "10"]])
+        self.assertEqual(rows(export("demo"), "mortalitybill.csv"), [["id", "year", "type", "count"], ["1", "1665", "Plague", "10"]])
+        self.assertEqual(export("bom").namelist(), ["datapackage.json"])  # no tables yet
 
 
 class ExportViewTests(TestCase):
-    databases = {"default", "bom_db"}
+    databases = {"default", "demo_db"}
 
-    def get(self, user, project="bom"):
+    def get(self, user, project="demo"):
         request = RequestFactory().get("/apiary/export/", {"project": project})
         request.user = user
         return export_project(request)
@@ -80,7 +79,7 @@ class ExportViewTests(TestCase):
         response = self.get(MagicMock(is_active=True, is_superuser=True))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/zip")
-        self.assertRegex(response["Content-Disposition"], r'^attachment; filename="bom-\d{8}-\d{6}\.zip"$')
+        self.assertRegex(response["Content-Disposition"], r'^attachment; filename="demo-\d{8}-\d{6}\.zip"$')
         self.assertEqual(response["Cache-Control"], "private, no-store")
         archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
         self.assertIn("mortalitybill.csv", archive.namelist())

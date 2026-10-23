@@ -141,7 +141,7 @@ spec:
               set -eu
               pg_restore --list /restore/dump/apiary-django.dump > /tmp/toc
               echo "[restore] $(wc -l < /tmp/toc) TOC entries"
-              for s in bom connthreads mappingviolence relec; do
+              for s in demo connthreads mappingviolence relec; do
                 grep -q " SCHEMA - $s " /tmp/toc || { echo "[restore] schema $s missing" >&2; exit 1; }
                 echo "[restore] schema $s present"
               done

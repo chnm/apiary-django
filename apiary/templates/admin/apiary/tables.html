@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+    <p>Live tables change through MCP (<code>propose_table_change</code>), reviewed under
+       <a class="underline" href="{{ changes_url }}">Changes</a>; tables in code change with the codebase.</p>
+    {% for table in tables %}
+    <section class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+        <header class="border-b border-base-200 p-4 dark:border-base-800">
+            <h2 class="font-semibold">{{ table.name }}{% if table.label != table.name %} <span class="font-normal">({{ table.label }})</span>{% endif %}</h2>
+            <p class="text-sm">{% if table.live %}Live table{% else %}Defined in code{% endif %} ·
+               {% if table.count > limit %}first {{ limit }} of {{ table.count }} rows{% else %}{{ table.count }} row{{ table.count|pluralize }}{% endif %}</p>
+        </header>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr>{% for column in table.columns %}<th class="text-left p-2 align-top">{{ column.name }}<br><span class="font-normal text-xs">{{ column.type }}{% if column.required %}, required{% endif %}</span></th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for row in table.rows %}
+                    <tr class="border-t border-base-200 dark:border-base-800">{% for value in row %}<td class="p-2 align-top">{{ value|default_if_none:"" }}</td>{% endfor %}</tr>
+                    {% empty %}
+                    <tr><td class="p-2" colspan="{{ table.columns|length }}">No rows yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% empty %}
+    <p>No tables yet. An admin of {{ project }} can create them over MCP with <code>propose_table_change</code>.</p>
+    {% endfor %}
+</div>
+{% endblock %}

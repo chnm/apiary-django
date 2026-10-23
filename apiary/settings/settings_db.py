@@ -29,10 +29,26 @@ DATABASES = {
     "bom_db": {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': env('BOM_DB_PATH', default=str(BASE_DIR / 'bom.sqlite3')),
+        # WAL lets the app and MCP containers read while one writes; IMMEDIATE
+        # takes the write lock up front, so busy writers wait (timeout, in
+        # seconds) instead of failing mid-transaction.
+        "OPTIONS": {
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+            "transaction_mode": "IMMEDIATE",
+            "timeout": 20,
+        },
     },
     "pinkertons_db": {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': env('PINKERTONS_DB_PATH', default=str(BASE_DIR / 'pinkertons.sqlite3')),
+        # WAL lets the app and MCP containers read while one writes; IMMEDIATE
+        # takes the write lock up front, so busy writers wait (timeout, in
+        # seconds) instead of failing mid-transaction.
+        "OPTIONS": {
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+            "transaction_mode": "IMMEDIATE",
+            "timeout": 20,
+        },
     },
     "connthreads_db": {
         "ENGINE": "django.db.backends.postgresql",
@@ -67,6 +83,17 @@ DATABASES = {
             "options": "-c search_path=relec"
         },
     },
+    "demo_db": {
+        "ENGINE": "django.db.backends.postgresql",
+        "HOST": env("DB_HOST", default="localhost"),
+        "PORT": env("DB_PORT", default="5432"),
+        "NAME": env("DB_NAME", default="apiary-django"),
+        "USER": env("DB_USER", default="apiary-django"),
+        "PASSWORD": env("DB_PASS", default="password"),
+        "OPTIONS": {
+            "options": "-c search_path=demo"
+        },
+    },
 }
 # The migrate Job sets this so a migration blocked behind the nightly pg_dump
 # fails and retries instead of holding the app's queries behind its lock.
@@ -76,6 +103,9 @@ if DB_LOCK_TIMEOUT := env("DB_LOCK_TIMEOUT", default=""):
             _db["OPTIONS"]["options"] += f" -c lock_timeout={DB_LOCK_TIMEOUT}"
 
 DATABASE_ROUTERS = [
+    # Live table definitions live in every project's database, beside its tables.
+    'apiary.routers.db.LiveRouter',
+    'apiary.routers.db.DemoRouter',
     'apiary.routers.db.BomRouter',
     'apiary.routers.db.ConnThreadsRouter',
     'apiary.routers.db.MappingViolenceRouter',

@@ -55,12 +55,12 @@ class OAuthFlowTests(TransactionTestCase):
         self.assertEqual(response.status_code, 302, response.text)
         return response.headers["location"]
 
-    def consent(self, location, decision="approve"):
+    def consent(self, location, decision="approve", scopes=()):
         url = urlsplit(location)
         self.assertEqual(f"{url.scheme}://{url.netloc}", "http://testserver")
         page = self.client.get(f"{url.path}?{url.query}")
         self.assertEqual(page.status_code, 200)
-        return self.client.post(url.path, {"request": query(location)["request"], decision: ""})
+        return self.client.post(url.path, {"request": query(location)["request"], decision: "", "scope": list(scopes)})
 
     def token(self, **form):
         return self.mcp.post("/token", data=form)
@@ -124,6 +124,19 @@ class OAuthFlowTests(TransactionTestCase):
         self.assertEqual(self.mcp.post("/revoke", data=revoke).status_code, 200)
         self.assertEqual(self.tools(renewed["access_token"]).status_code, 401)
         self.assertFalse(OAuthToken.objects.exists())
+
+    def test_the_user_grants_scopes_on_the_consent_page(self):
+        client_id = self.register().json()["client_id"]
+        verifier, challenge = pkce()
+        location = self.authorize(client_id, challenge, scope="mcp:read mcp:schema")
+        page = self.client.get(location.removeprefix("http://testserver")).content.decode()
+        self.assertIn('value="mcp:schema" checked', page, "what the client asked for starts checked")
+        self.assertNotIn('value="mcp:write" checked', page)
+        code = query(self.consent(location, scopes=["mcp:write", "bogus"])["Location"])["code"]
+        tokens = self.token(grant_type="authorization_code", code=code, redirect_uri=REDIRECT_URI,
+                            client_id=client_id, code_verifier=verifier, resource=RESOURCE).json()
+        self.assertEqual(tokens["scope"], "mcp:read mcp:write")
+        self.assertEqual(OAuthToken.objects.get().scopes, ["mcp:read", "mcp:write"])
 
     def test_deny_returns_access_denied(self):
         client_id = self.register().json()["client_id"]

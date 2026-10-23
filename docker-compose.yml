@@ -38,29 +38,14 @@ services:
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+    # projects.yaml before migrate_projects, which keeps existing Project rows;
+    # both fixtures write by primary key, so only on a fresh database.
     command: >
         sh -c "uv run manage.py migrate --database=default --verbosity=1 &&
                uv run manage.py loaddata projects.yaml --database=default --verbosity=1 &&
-
-               uv run manage.py migrate bom --database=bom_db --verbosity=1 &&
-               uv run manage.py loaddata mortalities.json --database=bom_db --verbosity=1 &&
-
-               uv run manage.py migrate connthreads --database=connthreads_db --verbosity=1 &&
-               uv run manage.py loaddata textiles.json --database=connthreads_db --verbosity=1 &&
-
-               uv run manage.py migrate mappingviolence --database=mappingviolence_db --verbosity=1 &&
-               uv run manage.py loaddata witnesses.json --database=mappingviolence_db --verbosity=1 &&
-
-               uv run manage.py migrate relec --database=relec_db --verbosity=1 &&
-               uv run manage.py loaddata denominations.json --database=relec_db --verbosity=1 &&
-               uv run manage.py loaddata schedules.json --database=relec_db --verbosity=1 &&
-
-               uv run manage.py migrate pinkertons --database=pinkertons_db --verbosity=1 &&
-               uv run manage.py loaddata activities.json --database=pinkertons_db --verbosity=1 &&
-
-               uv run manage.py init_project_groups && 
+               uv run manage.py migrate_projects &&
                uv run manage.py loaddata users.yaml --database=default --verbosity=1 &&
-               uv run manage.py init_superuser && 
+               uv run manage.py init_superuser &&
                uv run manage.py runserver 0.0.0.0:8000"
     depends_on:
       db:

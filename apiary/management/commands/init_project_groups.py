@@ -1,7 +1,9 @@
 """
 Management command to create role groups for each project.
 
-Creates groups with view/add/change/delete permissions for each project app.
+Creates each project's viewer, editor and admin groups. Membership gives the
+role (apiary.projects); the project's models in code also get the role's
+view/add/change/delete permissions, for the admin.
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
@@ -60,13 +62,9 @@ class Command(BaseCommand):
                 )
                 continue
 
+            # Live tables have no model permissions: membership itself grants
+            # the role (apiary.projects). Code models get theirs for the admin.
             models = list(app_config.get_models())
-
-            if not models:
-                self.stdout.write(
-                    self.style.WARNING(f'No models found in "{app_label}", skipping...')
-                )
-                continue
 
             # Create groups for each role
             for role in roles:

@@ -6,11 +6,11 @@ import zipfile
 from django.contrib.auth.models import User
 from django.core.files.storage import storages
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from apiary import projectdata
 from apiary.models import DataSnapshot, Site
-from bom.models import MortalityBill
+from demo.models import MortalityBill
 
 SITES = "/admin/apiary/site/"
 SNAPSHOTS = "/admin/apiary/datasnapshot/"
@@ -35,16 +35,16 @@ class SiteAdminTests(TestCase):
         self.client.force_login(self.root)
 
     def create(self):
-        response = self.client.post(f"{SITES}add/", {"project": "bom", "name": "plague", "title": "Plague"})
+        response = self.client.post(f"{SITES}add/", {"project": "demo", "name": "plague", "title": "Plague"})
         return response, Site.objects.filter(name="plague").first()
 
     def test_create_upload_publish_rollback_unpublish_delete(self):
         response, site = self.create()
-        self.assertEqual((site.project, site.created_by), ("bom", self.root))
-        self.assertContains(self.client.post(f"{SITES}add/", {"project": "bom", "name": "Bad Name"}), "Site names are")
+        self.assertEqual((site.project, site.created_by), ("demo", self.root))
+        self.assertContains(self.client.post(f"{SITES}add/", {"project": "demo", "name": "Bad Name"}), "Site names are")
         # The same checks as MCP: unique across projects, with the owner named.
         self.assertContains(self.client.post(f"{SITES}add/", {"project": "relec", "name": "plague"}),
-                            "taken (by bom/plague)")
+                            "taken (by demo/plague)")
 
         upload = f"{SITES}{site.pk}/upload/"
         self.client.post(upload, {"archive": zipped({
@@ -86,8 +86,8 @@ class SiteAdminTests(TestCase):
     def test_per_project_list_and_superusers_only(self):
         _, site = self.create()
         Site.objects.create(project="relec", name="other")  # bypasses the checks; only the list is tested
-        listing = self.client.get(f"{SITES}?project__exact=bom").content.decode()
-        self.assertIn("bom/plague", listing)
+        listing = self.client.get(f"{SITES}?project__exact=demo").content.decode()
+        self.assertIn("demo/plague", listing)
         self.assertNotIn("relec/other", listing)
 
         staff = User.objects.create_user("staff", is_staff=True)
@@ -98,18 +98,18 @@ class SiteAdminTests(TestCase):
         self.assertEqual(self.client.post(f"{SITES}{site.pk}/publish/").status_code, 403)
 
 
-class SnapshotBundleTests(TestCase):
+class SnapshotBundleTests(TransactionTestCase):  # restores run DDL in their own transaction
     databases = "__all__"
 
     def setUp(self):
         self.root = User.objects.create_superuser("root", password="x")
         self.client.force_login(self.root)
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
-        self.snapshot, _ = projectdata.take_snapshot("bom", kind="manual", label="original")
+        self.snapshot = projectdata.take_snapshot("demo", kind="manual", label="original")
 
     def export(self):
         response = self.client.get(f"{SNAPSHOTS}{self.snapshot.pk}/export/")
-        self.assertIn(f'filename="bom-snapshot-{self.snapshot.pk}.zip"', response["Content-Disposition"])
+        self.assertIn(f'filename="demo-snapshot-{self.snapshot.pk}.zip"', response["Content-Disposition"])
         return b"".join(response.streaming_content)
 
     def upload(self, data):
@@ -148,9 +148,9 @@ class SnapshotBundleTests(TestCase):
             (b"not a zip", "Not a snapshot bundle"),
             (self.rebundle(bundle, manifest={"project": "auth"}), "Unknown project"),
             (self.rebundle(bundle, manifest={"data": {"sha256": "0" * 64}}), "checksum"),
-            (self.rebundle(bundle, records=foreign), "records outside bom: auth.user"),
+            (self.rebundle(bundle, records=foreign), "records outside demo: auth.user"),
             (self.rebundle(bundle, records=[{"model": "relec.denomination", "pk": 1, "fields": {}}]),
-             "records outside bom"),
+             "records outside demo"),
         ]:
             self.assertContains(self.upload(data), message)
         self.assertFalse(DataSnapshot.objects.filter(kind="imported").exists())
@@ -164,7 +164,7 @@ class SnapshotBundleTests(TestCase):
         storage.save(self.snapshot.data_path, io.BytesIO(payload))
         DataSnapshot.objects.filter(pk=self.snapshot.pk).update(sha256=__import__("hashlib").sha256(payload).hexdigest())
         self.snapshot.refresh_from_db()
-        with self.assertRaisesMessage(projectdata.SnapshotError, "records outside bom"):
+        with self.assertRaisesMessage(projectdata.SnapshotError, "records outside demo"):
             projectdata.restore_snapshot(self.snapshot)
         self.assertEqual(MortalityBill.objects.count(), 2)
 
@@ -179,20 +179,22 @@ class DeleteSiteSnapshotsTests(TestCase):
         MortalityBill.objects.create(year=1665, type="Plague", count=10)
 
     def published_twice(self, name):
+        """A site whose two versions were published when sites froze datasets, each with a snapshot."""
         from apiary import sites
 
-        site = sites.create_site("bom", name, user=self.root)
+        site = sites.create_site("demo", name, user=self.root)
         sites.put_files(site, {"index.html": b"x"}, user=self.root)
-        sites.attach_dataset(site, "deaths-by-year", user=self.root)
-        sites.publish(site, user=self.root)
-        sites.publish(site, user=self.root)
+        for _ in range(2):
+            version = sites.publish(site, user=self.root)
+            version.data_snapshot = projectdata.take_snapshot("demo", kind="site", label=f"{site} v{version.number}")
+            version.save(update_fields=["data_snapshot"])
         return site
 
     def test_delete_takes_the_publish_snapshots_and_lists_them_first(self):
         site = self.published_twice("plague")
         taken = list(DataSnapshot.objects.filter(kind="site"))
         self.assertEqual(len(taken), 2)
-        manual, _ = projectdata.take_snapshot("bom", kind="manual")
+        manual = projectdata.take_snapshot("demo", kind="manual")
 
         confirm = self.client.get(f"{SITES}{site.pk}/delete/").content.decode()
         for snapshot in taken:
@@ -212,7 +214,7 @@ class DeleteSiteSnapshotsTests(TestCase):
 
         site = self.published_twice("plague")
         shared = DataSnapshot.objects.filter(kind="site").first()
-        other = sites.create_site("bom", "other", user=self.root)
+        other = sites.create_site("demo", "other", user=self.root)
         SiteVersion.objects.create(site=other, number=1, data_snapshot=shared)
 
         unshared = str(DataSnapshot.objects.exclude(pk=shared.pk).get())

@@ -4,9 +4,11 @@ Snapshot and restore one project's data, on SQLite or PostgreSQL alike.
 A snapshot is the project's rows as a gzipped Django fixture (typed, keeps
 NULL vs empty) plus a manifest, stored in private storage under
 snapshots/<project>/<id>/ and recorded as a DataSnapshot. It is read from one
-consistent moment, and records the project's applied migrations: a restore
-refuses a snapshot taken against another schema rather than loading rows
-into tables that no longer match them.
+consistent moment and records both halves of the schema: the applied
+migrations of the project's models in code, and the definitions of its live
+tables (apiary.live). A restore refuses a snapshot from other migrations,
+and rebuilds the live tables as the snapshot defines them, so restoring
+undoes schema changes too.
 
 Restoring first snapshots the current data, so every restore can be undone.
 """
@@ -20,35 +22,41 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 
-from django.apps import apps
+from django.core import serializers
 from django.core.files import File
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
-from django.core.management import call_command
 from django.core.management.color import no_style
-from django.db import connections, router, transaction
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db import connections, transaction
 from django.db.migrations.recorder import MigrationRecorder
 
-from apiary.views import PROJECT_APPS
+from apiary import projects
+from apiary.live import runtime
+from apiary.live import schema as live_schema
+from apiary.projects import PROJECT_APPS, UnknownProject
 
 
 class SnapshotError(Exception):
     pass
 
 
-def project_models(project):
-    if project not in PROJECT_APPS:
-        raise SnapshotError(f"Unknown project {project!r}; one of {', '.join(PROJECT_APPS)}.")
-    return list(apps.get_app_config(project).get_models(include_auto_created=True))
-
-
 def project_alias(project):
-    return router.db_for_write(project_models(project)[0])
+    try:
+        return projects.project_alias(project)
+    except UnknownProject as error:
+        raise SnapshotError(str(error))
+
+
+def project_models(project):
+    """Every table of the project as a model: code models, then live tables."""
+    project_alias(project)
+    return list(projects.project_models(project).values())
 
 
 def row_counts(project):
     alias = project_alias(project)
-    return {m._meta.db_table: m._default_manager.using(alias).count() for m in project_models(project)}
+    return {name: model._default_manager.using(alias).count() for name, model in projects.project_models(project).items()}
 
 
 def applied_migrations(project):
@@ -56,18 +64,27 @@ def applied_migrations(project):
     return sorted(name for app, name in recorder.applied_migrations() if app == project)
 
 
+def flush_tables(project, models):
+    connection = connections[project_alias(project)]
+    tables = [m._meta.db_table for m in models]
+    if tables:
+        connection.ops.execute_sql_flush(connection.ops.sql_flush(
+            no_style(), tables, reset_sequences=True, allow_cascade=False,
+        ))
+
+
 def flush(project):
     """
-    Empty the project's tables with the statements Django's flush uses
-    (TRUNCATE ... RESTART IDENTITY on PostgreSQL). No CASCADE: the tables are
-    truncated together, and nothing outside the project may go. Call it
-    inside a transaction on the project's database.
+    Empty the project's tables, code and live, with the statements Django's
+    flush uses (TRUNCATE ... RESTART IDENTITY on PostgreSQL). No CASCADE: the
+    tables are truncated together, and nothing outside the project may go.
+    Call it inside a transaction on the project's database.
     """
-    connection = connections[project_alias(project)]
-    tables = [m._meta.db_table for m in project_models(project)]
-    connection.ops.execute_sql_flush(connection.ops.sql_flush(
-        no_style(), tables, reset_sequences=True, allow_cascade=False,
-    ))
+    flush_tables(project, project_models(project))
+
+
+def flush_code_tables(project):
+    flush_tables(project, list(projects.code_models(project).values()))
 
 
 @contextmanager
@@ -102,13 +119,21 @@ def save_exactly(name, content):
         raise SnapshotError(f"Storage already holds {name}; not overwriting it.")
 
 
-def take_snapshot(project, *, kind, user=None, label="", during=None):
-    """
-    Snapshot the project and return its DataSnapshot. during(alias), if
-    given, runs inside the same consistent read, so whatever it reads (e.g.
-    a site's datasets) matches the snapshot exactly; its result is returned
-    as the second value.
-    """
+def write_records(project, alias, path):
+    """Every row of the project as one gzipped Django fixture, table by table."""
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write("[")
+        first = True
+        for model in project_models(project):
+            queryset = model._default_manager.using(alias).order_by("pk")
+            for record in serializers.serialize("python", queryset.iterator(chunk_size=2000)):
+                handle.write(("" if first else ",\n") + json.dumps(record, cls=DjangoJSONEncoder))
+                first = False
+        handle.write("]\n")
+
+
+def take_snapshot(project, *, kind, user=None, label=""):
+    """Snapshot the project and return its DataSnapshot."""
     from apiary.models import DataSnapshot
 
     workdir = tempfile.mkdtemp()
@@ -117,28 +142,23 @@ def take_snapshot(project, *, kind, user=None, label="", during=None):
         with consistent_read(project) as alias:
             counts = row_counts(project)
             migrations = applied_migrations(project)
-            call_command("dumpdata", project, database=alias, output=data_path, verbosity=0)
-            extra = during(alias) if during else None
+            specs = runtime.read_specs(alias)
+            write_records(project, alias, data_path)
 
         snapshot = DataSnapshot.objects.create(
             project=project, kind=kind, label=label, created_by=user,
-            row_counts=counts, migrations=migrations,
+            row_counts=counts, migrations=migrations, schema=specs,
             sha256=sha256(data_path), size=os.path.getsize(data_path),
         )
         with open(data_path, "rb") as handle:
             save_exactly(snapshot.data_path, File(handle))
         save_exactly(snapshot.manifest_path, ContentFile(json.dumps(snapshot.manifest(), indent=2).encode()))
-        return snapshot, extra
+        return snapshot
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def check_records(project, data_path):
-    """
-    The data must be readable and hold only this project's records: restoring
-    loads it, so an imported bundle must not be able to write users or
-    another project's tables.
-    """
+def read_records(data_path):
     try:
         with gzip.open(data_path) as handle:
             records = json.load(handle)
@@ -146,11 +166,62 @@ def check_records(project, data_path):
         raise SnapshotError(f"The snapshot data is not readable gzipped JSON: {error}")
     if not isinstance(records, list):
         raise SnapshotError("The snapshot data is not a list of records.")
-    allowed = {m._meta.label_lower for m in project_models(project)}
+    return records
+
+
+def check_schema(schema):
+    """A snapshot's live table definitions must build: they become tables on restore."""
+    if not isinstance(schema, list):
+        raise SnapshotError("The snapshot's schema is not a list of tables.")
+    try:
+        for table in schema:
+            runtime.check_name("Table", table["name"])
+            for column in table["columns"]:
+                runtime.check_name("Column", column["name"])
+                runtime.make_field(runtime.column_spec(column))
+    except (KeyError, TypeError, runtime.SchemaError) as error:
+        raise SnapshotError(f"The snapshot's schema is not valid: {error}")
+
+
+def check_records(project, data_path, schema):
+    """
+    The data must be readable and hold only this project's records: restoring
+    loads it, so an imported bundle must not be able to write users or
+    another project's tables.
+    """
+    check_schema(schema)
+    records = read_records(data_path)
+    allowed = {m._meta.label_lower for m in projects.code_models(project).values()}
+    allowed |= {f"{project}.{table['name']}" for table in schema}
     strays = sorted({str(r.get("model")) for r in records if not isinstance(r, dict) or r.get("model") not in allowed})
     if strays:
         raise SnapshotError(f"The snapshot holds records outside {project}: {', '.join(strays[:5])}.")
-    return len(records)
+    return records
+
+
+def load_records(project, alias, records, live):
+    """Insert the snapshot's rows: code models by Django's deserializer, live tables directly."""
+    by_label = {f"{project}.{name}": model for name, model in live.items()}
+    code = [record for record in records if record["model"] not in by_label]
+    for obj in serializers.deserialize("python", code, using=alias):
+        obj.save(using=alias)
+    rows = {}
+    for record in records:
+        model = by_label.get(record["model"])
+        if model is None:
+            continue
+        values = {"id": record["pk"]}
+        for name, value in record["fields"].items():
+            field = model._meta.get_field(name)
+            values[field.attname] = field.to_python(value) if not field.is_relation else value
+        rows.setdefault(model, []).append(model(**values))
+    for model, objects in rows.items():
+        model._default_manager.using(alias).bulk_create(objects, batch_size=1000)
+    connection = connections[alias]
+    statements = connection.ops.sequence_reset_sql(no_style(), project_models(project))
+    with connection.cursor() as cursor:
+        for statement in statements:
+            cursor.execute(statement)
 
 
 def restore_snapshot(snapshot, *, user=None):
@@ -176,20 +247,23 @@ def restore_snapshot(snapshot, *, user=None):
             shutil.copyfileobj(source, target)
         if sha256(data_path) != snapshot.sha256:
             raise SnapshotError(f"Snapshot #{snapshot.pk} does not match its checksum; not restoring it.")
-        check_records(project, data_path)  # before anything is deleted
+        records = check_records(project, data_path, snapshot.schema)  # before anything is deleted
 
-        before, _ = take_snapshot(project, kind="pre-restore", user=user,
-                                  label=f"Before restoring snapshot #{snapshot.pk}")
+        before = take_snapshot(project, kind="pre-restore", user=user, label=f"Before restoring snapshot #{snapshot.pk}")
         alias = project_alias(project)
-        with transaction.atomic(using=alias):
-            flush(project)
-            call_command("loaddata", data_path, database=alias, verbosity=0)
+        # One transaction for the DDL and the rows. On SQLite the schema
+        # editor also turns foreign key checks off until it commits, then
+        # checks every row.
+        with connections[alias].schema_editor(atomic=True) as editor:
+            flush_code_tables(project)
+            live = live_schema.replace(editor, project, snapshot.schema)
+            load_records(project, alias, records, live)
         return before
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-AUTOMATIC = ("pre-restore", "pre-reset", "site")  # never "manual" or "imported"
+AUTOMATIC = ("pre-restore", "pre-reset", "pre-change", "site")  # never "manual" or "imported"
 
 
 def delete_snapshot(snapshot):
@@ -242,7 +316,7 @@ def import_bundle(source, *, user=None):
         info = bundle.getinfo("data.json.gz")
     except (zipfile.BadZipFile, KeyError, ValueError) as error:
         raise SnapshotError(f"Not a snapshot bundle (manifest.json and data.json.gz in a zip): {error}")
-    if manifest.get("format") != 1:
+    if manifest.get("format") not in (1, 2):
         raise SnapshotError(f"Unsupported bundle format {manifest.get('format')!r}.")
     project = manifest.get("project")
     project_models(project)  # raises for an unknown project
@@ -256,13 +330,14 @@ def import_bundle(source, *, user=None):
             shutil.copyfileobj(data, target)
         if sha256(data_path) != manifest.get("data", {}).get("sha256"):
             raise SnapshotError("The data does not match the manifest's checksum.")
-        check_records(project, data_path)
+        schema_specs = manifest.get("schema", [])
+        check_records(project, data_path, schema_specs)
 
         source_note = f"#{manifest.get('id')} of {manifest.get('created_at', '?')}"
         snapshot = DataSnapshot.objects.create(
             project=project, kind="imported", created_by=user,
             label=(f"Imported {source_note}: {manifest.get('label') or manifest.get('kind', '')}")[:200],
-            row_counts=manifest.get("row_counts", {}), migrations=manifest.get("migrations", []),
+            row_counts=manifest.get("row_counts", {}), migrations=manifest.get("migrations", []), schema=schema_specs,
             sha256=sha256(data_path), size=os.path.getsize(data_path),
         )
         with open(data_path, "rb") as handle:

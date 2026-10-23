@@ -74,6 +74,8 @@ INSTALLED_APPS = [
 
     # apps
     'apiary',
+    'apiary.live',
+    'demo',
     'bom',
     'connthreads',
     'mappingviolence',
@@ -97,7 +99,7 @@ MIDDLEWARE = [
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_PERMISSION_CLASSES': ['apiary.api.permissions.ModelPermissions'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAdminUser'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 100,
 }

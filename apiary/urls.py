@@ -5,7 +5,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 
 from apiary import views
-from apiary.api import crud, datasets
+from apiary.api import crud
 from apiary.health import health
 
 urlpatterns = [
@@ -15,9 +15,9 @@ urlpatterns = [
     path('accounts/', include('allauth.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='api_schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='api_schema'), name='api_docs'),
-    # DRF first: both claim /api/ as their root, and DRF's lists every model.
     path('api/', include(crud.router.urls)),
-    path('api/', datasets.api.urls),
+    path('api/<slug:project>/v1/<slug:table>/', crud.live_list, name='live-table-list'),
+    path('api/<slug:project>/v1/<slug:table>/<int:pk>/', crud.live_detail, name='live-table-detail'),
     path('apiary/whoami/', views.whoami_page, name='apiary_whoami_page'),
     path('apiary/mcp/authorize/', views.mcp_authorize, name='apiary_mcp_authorize'),
     path('apiary/mgmt/', views.management_commands_dashboard, name='apiary_management_commands_dashboard'),

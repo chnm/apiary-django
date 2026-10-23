@@ -11,20 +11,26 @@
 {% else %}
     <div class="flex flex-col gap-3 p-4">
         <p><strong>{{ client.name|default:"An unnamed MCP client" }}</strong> wants to use Apiary as <strong>{{ user.get_username }}</strong>.</p>
-        <p>If you allow it, it can:</p>
-        <ul class="list-disc pl-6">
-            <li>read every project's data through <code>{{ mcp_url }}</code></li>
-            <li>create, publish and change static sites as you</li>
-        </ul>
+        <p>If you allow it, it acts as you through <code>{{ mcp_url }}</code> and can:</p>
         <p>You'll return to <code>{{ redirect_to.scheme }}://{{ redirect_to.netloc }}</code>.{% if client_uri %} The client says it is <code>{{ client_uri }}</code>.{% endif %}
             Allow only clients you started yourself.</p>
         <p class="text-sm">The connection lasts up to 30 days without use. A superuser can end it any time under MCP connections.</p>
     </div>
-    <form method="post" class="border-base-200 border-t flex gap-3 p-4 dark:border-base-800">
+    <form method="post" class="border-base-200 border-t flex flex-col gap-4 p-4 dark:border-base-800">
         {% csrf_token %}
         <input type="hidden" name="request" value="{{ request_token }}">
+        <fieldset class="flex flex-col gap-2 w-full">
+            {% for scope in scopes %}
+            <label class="flex gap-2 items-start">
+                <input type="checkbox" name="scope" value="{{ scope.name }}"{% if scope.checked %} checked{% endif %}{% if scope.name == "mcp:read" %} disabled{% endif %}>
+                <span>{{ scope.description }} <code class="text-xs">{{ scope.name }}</code></span>
+            </label>
+            {% endfor %}
+        </fieldset>
+        <div class="flex gap-3">
         {% component "unfold/components/button.html" with submit=1 name="approve" variant="primary" %}Allow{% endcomponent %}
         {% component "unfold/components/button.html" with submit=1 name="deny" variant="default" %}Deny{% endcomponent %}
+        </div>
     </form>
 {% endif %}
 </div>

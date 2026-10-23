@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import tempfile
 from io import StringIO
 from unittest.mock import MagicMock
@@ -31,10 +32,10 @@ class MediaTests(SimpleTestCase):
     def test_check_storage_command_passes(self):
         call_command("check_storage", stdout=StringIO())
 
-    def test_private_files_need_a_permission_in_the_files_app(self):
+    def test_private_files_need_a_role_in_the_files_project(self):
         storages["default"].save("bom/report.txt", ContentFile(b"x"))
-        reader = MagicMock(is_authenticated=True)
-        reader.has_module_perms.side_effect = lambda app: app == "bom"
+        reader = MagicMock(is_authenticated=True, is_active=True, is_superuser=False)
+        reader.groups.all.return_value = [SimpleNamespace(name="bom-viewer")]
         self.assertEqual(self.get("private", "bom/report.txt", reader).status_code, 200)
         self.assertEqual(self.get("private", "bom/report.txt", AnonymousUser()).status_code, 302)
         with self.assertRaises(PermissionDenied):

@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apiary import projectdata
-from apiary.views import PROJECT_APPS
+from apiary.projects import PROJECT_APPS
 
 
 class Command(BaseCommand):
@@ -32,7 +32,7 @@ class Command(BaseCommand):
         alias = projectdata.project_alias(project)
         fixtures = sorted(str(path) for path in (Path(config.path) / "fixtures").glob("*.json"))
 
-        before, _ = projectdata.take_snapshot(project, kind="pre-reset", label="Before reset_project_data")
+        before = projectdata.take_snapshot(project, kind="pre-reset", label="Before reset_project_data")
         with transaction.atomic(using=alias):
             projectdata.flush(project)
             if fixtures and not no_fixtures:
