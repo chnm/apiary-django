@@ -3,6 +3,7 @@ Django Unfold admin interface settings.
 
 Documentation: https://github.com/unfoldadmin/django-unfold
 """
+import logging
 from urllib.parse import parse_qs
 
 from django.urls import reverse_lazy
@@ -28,54 +29,74 @@ def listed(path, project=None):
     return active
 
 
-# Each project's sidebar section: its tables (the live tables page; demo's
-# code models nest under Data Models, Unfold's collapsible list that opens on
-# any of them), its change history, sites and data snapshots. Links are plain
-# strings: Unfold marks an item active only when its link is one.
-def project_section(title, label, models=()):
-    """models: (title, icon, model_name) for each of the project's models in code."""
-    def member(request):
-        from apiary.projects import has_role
-        return has_role(request.user, label, "viewer")
+# Each project's sidebar section: Data Models, Unfold's collapsible list (open
+# on any of its pages) of the project's tables page and every table it has,
+# then its change history, sites and data snapshots. Agents add
+# tables at any time over MCP, so the sections are built per request. Links
+# are plain strings: Unfold marks an item active only when its link is one.
+PROJECTS = [
+    ("Demo", "demo"),
+    ("Death by Numbers", "bom"),
+    ("Connecting Threads", "connthreads"),
+    ("Mapping Violence", "mappingviolence"),
+    ("Religious Ecologies", "relec"),
+    ("Pinkertons", "pinkertons"),
+]
+# Tables defined in code keep their own titles and icons, and their admin pages.
+CODE_TABLES = {
+    ("demo", "mortalitybill"): ("Bills of Mortality", "skull"),
+    ("demo", "activity"): ("Activities", "visibility"),
+    ("demo", "location"): ("Locations", "location_on"),
+}
 
-    def superuser(request):
-        return request.user.is_superuser
 
-    items = [{"title": "Tables", "icon": "table_view", "link": f"{TABLES_PATH}{label}/", "permission": member}]
-    if models:
-        items.append({
-            "title": "Data Models",
-            "icon": "database",
-            "link": f"/admin/{label}/",
-            "permission": member,
-            "items": [
-                {"title": model_title, "icon": icon, "link": f"/admin/{label}/{model}/", "permission": member}
-                for model_title, icon, model in models
-            ],
-        })
-    items += [
+def table_items(label):
+    from django.apps import apps
+    from django.db import DatabaseError
+    from apiary.projects import project_models
+
+    # Every admin page lists every project's tables: one project's database
+    # being unreachable must not take the rest of the admin with it.
+    try:
+        found = project_models(label)
+    except DatabaseError:
+        logging.getLogger(__name__).exception("Sidebar: cannot list %s tables", label)
+        return []
+    items = []
+    for name, model in found.items():
+        title, icon = CODE_TABLES.get((label, name)) or (str(model._meta.verbose_name_plural).capitalize(), "table_view")
+        in_code = model._meta.apps is apps
+        items.append({"title": title, "icon": icon, "link": f"/admin/{label}/{name}/" if in_code else f"{TABLES_PATH}{label}/{name}/"})
+    return items
+
+
+def project_section(request, title, label):
+    from apiary.projects import has_role
+
+    member = has_role(request.user, label, "viewer")
+    allowed = lambda yes: lambda request: yes
+    superuser = allowed(request.user.is_superuser)
+    overview = f"{TABLES_PATH}{label}/"
+    data_models = {"title": "Data Models", "icon": "database", "link": overview, "permission": allowed(member)}
+    if member and (tables := table_items(label)):
+        # An item with sub-items only opens them, so the overview is the first;
+        # Unfold matches links as substrings, which would light it up on every table.
+        data_models["items"] = [{"title": "All tables", "link": overview, "active": lambda request: request.path == overview}, *tables]
+    return {"title": title, "separator": True, "collapsible": True, "items": [
+        data_models,
         {"title": "Changes", "icon": "history", "link": f"/admin/apiary/change/?project__exact={label}",
          "active": listed("/admin/apiary/change/", label), "permission": superuser},
         {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}",
          "active": listed("/admin/apiary/site/", label), "permission": superuser},
         {"title": "Data Snapshots", "icon": "backup", "link": f"/admin/apiary/datasnapshot/?project__exact={label}",
          "active": listed("/admin/apiary/datasnapshot/", label), "permission": superuser},
-    ]
-    return {"title": title, "separator": True, "collapsible": True, "items": items}
+    ]}
 
 
-PROJECT_SECTIONS = [
-    project_section("Demo", "demo", [
-        ("Bills of Mortality", "skull", "mortalitybill"),
-        ("Activities", "visibility", "activity"),
-        ("Locations", "location_on", "location"),
-    ]),
-    project_section("Death by Numbers", "bom"),
-    project_section("Connecting Threads", "connthreads"),
-    project_section("Mapping Violence", "mappingviolence"),
-    project_section("Religious Ecologies", "relec"),
-    project_section("Pinkertons", "pinkertons"),
-]
+def navigation(request):
+    """The sidebar: Apiary, each project, then System Administration."""
+    first, *rest = NAVIGATION
+    return [first, *(project_section(request, title, label) for title, label in PROJECTS), *rest]
 
 
 UNFOLD = {
@@ -182,7 +203,6 @@ UNFOLD = {
                     },
                 ],
             },
-            *PROJECT_SECTIONS,
             {
                 "title": "System Administration",
                 "separator": True,
@@ -380,3 +400,7 @@ UNFOLD = {
     #     lambda request: static("js/custom.js"),
     # ],
 }
+
+# The static groups; navigation() puts the projects between them per request.
+NAVIGATION = UNFOLD["SIDEBAR"]["navigation"]
+UNFOLD["SIDEBAR"]["navigation"] = navigation

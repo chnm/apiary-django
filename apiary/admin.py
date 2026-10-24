@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.core.files.storage import storages
 import json
@@ -709,31 +710,41 @@ class ChangeAdmin(SuperuserOnly, ModelAdmin):
     def get_urls(self):
         return [
             path('tables/<slug:project>/', self.admin_site.admin_view(self.tables_view), name='apiary_project_tables'),
+            path('tables/<slug:project>/<slug:table>/', self.admin_site.admin_view(self.tables_view), name='apiary_project_table'),
         ] + super().get_urls()
 
     TABLE_ROWS = 50
 
-    def tables_view(self, request, project):
-        """A project's tables, their columns and first rows, for anyone with a role there."""
+    def tables_view(self, request, project, table=None):
+        """A project's tables (or one of them), their columns and first rows, for anyone with a role there."""
         if project not in PROJECT_APPS:
             raise Http404
         if not has_role(request.user, project, 'viewer'):
             raise PermissionDenied
         alias = project_alias(project)
         tables = []
-        for name, model in project_models(project).items():
+        found = project_models(project)
+        if table is not None:
+            if table not in found:
+                raise Http404
+            found = {table: found[table]}
+        for name, model in found.items():
             fields = model._meta.concrete_fields
             rows = model._default_manager.using(alias).order_by('pk')
             tables.append({
                 'name': name,
                 'label': model._meta.verbose_name,
-                'live': model._meta.apps is not apps,
+                # Tables defined in code are edited on their own admin pages.
+                'edit_url': f'/admin/{project}/{name}/' if model._meta.apps is apps else None,
                 'columns': [{'name': f.name, 'type': changes_type(f), 'required': not f.null} for f in fields],
                 'count': rows.count(),
                 'rows': [[f.value_from_object(obj) for f in fields] for obj in rows[:self.TABLE_ROWS]],
             })
+        name = {label: title for title, label in settings.PROJECTS}.get(project, project)
+        heading = f"{name} · {str(found[table]._meta.verbose_name_plural).capitalize()}" if table else f"{name} · Data Models"
         return TemplateResponse(request, 'admin/apiary/tables.html', {
-            **self.admin_site.each_context(request), 'opts': self.opts, 'title': f'{project} tables',
+            # No opts: Unfold would head the page with the Changes admin it hangs off.
+            **self.admin_site.each_context(request), 'title': heading, 'content_title': heading,
             'project': project, 'tables': tables, 'limit': self.TABLE_ROWS,
             'changes_url': reverse('admin:apiary_change_changelist') + f'?project__exact={project}',
         })

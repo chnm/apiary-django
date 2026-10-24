@@ -197,6 +197,8 @@ class OAuthHousekeepingTests(TestCase):
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class OAuthAdminTests(TestCase):
+    databases = "__all__"  # every admin page lists each project's tables in the sidebar
+
     def test_only_superusers_see_and_end_connections(self):
         owner = User.objects.create_user("owner", is_staff=True)
         token = OAuthToken(client=OAuthClient.objects.create(client_id="c", name="Agent", info={}), user=owner)
