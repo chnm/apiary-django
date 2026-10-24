@@ -209,6 +209,8 @@ class McpChangeTests(TransactionTestCase):
 
 
 class ApiTokenAdminTests(TestCase):
+    databases = "__all__"  # every admin page lists each project's tables in the sidebar
+
     def setUp(self):
         self.owner = User.objects.create_user("owner")
         self.admin = User.objects.create_superuser("root", password="x")

@@ -2,13 +2,13 @@
 
 {% block content %}
 <div class="flex flex-col gap-6">
-    <p>Live tables change through MCP (<code>propose_table_change</code>), reviewed under
-       <a class="underline" href="{{ changes_url }}">Changes</a>; tables in code change with the codebase.</p>
+    <p>Tables are added and changed over MCP (<code>propose_table_change</code>); every change is under
+       <a class="underline" href="{{ changes_url }}">Changes</a>.</p>
     {% for table in tables %}
     <section class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
         <header class="border-b border-base-200 p-4 dark:border-base-800">
             <h2 class="font-semibold">{{ table.name }}{% if table.label != table.name %} <span class="font-normal">({{ table.label }})</span>{% endif %}</h2>
-            <p class="text-sm">{% if table.live %}Live table{% else %}Defined in code{% endif %} ·
+            <p class="text-sm">{% if table.edit_url %}<a class="underline" href="{{ table.edit_url }}">Edit rows</a> · {% endif %}
                {% if table.count > limit %}first {{ limit }} of {{ table.count }} rows{% else %}{{ table.count }} row{{ table.count|pluralize }}{% endif %}</p>
         </header>
         <div class="overflow-x-auto">

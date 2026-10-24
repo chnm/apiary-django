@@ -213,8 +213,11 @@ and after). Never pruned.
   people (`apiary/diffview.py`); MCP change results carry a compact copy
   (10 rows; `list_changes` only the summary).
 - Admin > Changes (superusers): review, apply, reject, revert. Each project's
-  sidebar section links its Tables page (`/admin/apiary/change/tables/<project>/`,
-  for anyone with a role there) and its changes.
+  sidebar section has Data Models, for anyone with a role there: All tables
+  (`/admin/apiary/change/tables/<project>/`), then each table, live ones on
+  their own page (`.../<project>/<table>/`) and ones in code on their admin
+  pages. People never see which is which. The sidebar is built per request
+  (`navigation` in `settings_unfold.py`), since agents add tables any time.
 
 ### API
 

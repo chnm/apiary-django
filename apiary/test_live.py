@@ -247,7 +247,7 @@ class AdminTests(LiveCase):
         changes.create_records(self.admin, self.project, "letters", [{"subject": "Notes"}], via="test")
         page = self.client.get(f"/admin/apiary/change/tables/{self.project}/")
         self.assertContains(page, "letters")
-        self.assertContains(page, "Live table")
+        self.assertNotContains(page, "Live table")  # one list for every table, however it was made
         self.assertContains(page, "Notes")
         self.assertContains(page, "link to people")
         self.assertEqual(self.client.get("/admin/apiary/change/tables/nope/").status_code, 404)
