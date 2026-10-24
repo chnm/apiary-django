@@ -82,6 +82,10 @@ def project_section(request, title, label):
         # An item with sub-items only opens them, so the overview is the first;
         # Unfold matches links as substrings, which would light it up on every table.
         data_models["items"] = [{"title": "All tables", "link": overview, "active": lambda request: request.path == overview}, *tables]
+    # Unfold opens a section only for an active top-level item: Data Models is
+    # active on any of its pages, including tables in code outside the overview's path.
+    pages = [overview, *(table["link"] for table in data_models.get("items", ()))]
+    data_models["active"] = lambda request: any(request.path.startswith(page) for page in pages)
     return {"title": title, "separator": True, "collapsible": True, "items": [
         data_models,
         {"title": "Changes", "icon": "history", "link": f"/admin/apiary/change/?project__exact={label}",

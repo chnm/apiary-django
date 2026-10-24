@@ -22,6 +22,20 @@ class SidebarTests(TestCase):
         on_model = self.client.get("/admin/demo/location/").content.decode()
         self.assertIn("subnavigationOpen': true", on_model)
 
+    def test_a_tables_page_keeps_its_project_section_and_data_models_open(self):
+        # Unfold opens a section only for an active top-level item, never for a nested one.
+        import re
+
+        self.client.force_login(User.objects.create_superuser("root", password="x"))
+        for url in ("/admin/demo/location/", "/admin/demo/location/add/", "/admin/apiary/change/tables/demo/"):
+            page = self.client.get(url).content.decode()
+            demo = re.search(r"navigationOpen: (true|false)\}\"[^>]*>\s*<hr[^>]*>\s*<h2[^>]*>\s*Demo\b", page)
+            self.assertEqual(demo.group(1), "true", url)
+            self.assertIn("subnavigationOpen': true", page, url)
+        other = self.client.get("/admin/demo/location/").content.decode()
+        relec = re.search(r"navigationOpen: (true|false)\}\"[^>]*>\s*<hr[^>]*>\s*<h2[^>]*>\s*Religious Ecologies\b", other)
+        self.assertEqual(relec.group(1), "false")  # other projects stay closed
+
     def test_every_project_links_its_tables_and_changes(self):
         self.client.force_login(User.objects.create_superuser("root", password="x"))
         page = self.client.get("/admin/").content.decode()
