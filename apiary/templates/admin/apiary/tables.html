@@ -7,8 +7,8 @@
     {% for table in tables %}
     <section class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
         <header class="border-b border-base-200 p-4 dark:border-base-800">
-            <h2 class="font-semibold">{{ table.name }}{% if table.label != table.name %} <span class="font-normal">({{ table.label }})</span>{% endif %}</h2>
-            <p class="text-sm">{% if table.edit_url %}<a class="underline" href="{{ table.edit_url }}">Edit rows</a> · {% endif %}
+            <h2 class="font-semibold"><a class="underline" href="{{ table.url }}">{{ table.name }}</a>{% if table.label != table.name %} <span class="font-normal">({{ table.label }})</span>{% endif %}</h2>
+            <p class="text-sm">
                {% if table.count > limit %}first {{ limit }} of {{ table.count }} rows{% else %}{{ table.count }} row{{ table.count|pluralize }}{% endif %}</p>
         </header>
         <div class="overflow-x-auto">

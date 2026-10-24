@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+    <div class="flex flex-wrap gap-2 items-center">
+        <form method="get" class="flex gap-2 grow" role="search">
+            <input type="search" name="q" value="{{ search }}" placeholder="Search" aria-label="Search rows"
+                   class="border border-base-200 bg-white grow max-w-md px-3 py-2 rounded-default shadow-xs dark:bg-base-900 dark:border-base-700">
+            {% component "unfold/components/button.html" with submit=1 variant="default" %}Search{% endcomponent %}
+        </form>
+        {% if editor %}
+            {% component "unfold/components/button.html" with href=add_url %}Add row{% endcomponent %}
+        {% endif %}
+    </div>
+
+    <section class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+        <header class="border-b border-base-200 p-4 dark:border-base-800">
+            <p class="text-sm">
+                {{ page.paginator.count }} row{{ page.paginator.count|pluralize }}{% if search %} matching “{{ search }}”{% endif %}
+                {% if editor %}· every edit is recorded under <a class="underline" href="{{ changes_url }}">Changes</a>{% endif %}
+            </p>
+        </header>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr>{% for column in columns %}<th class="text-left p-2 align-top">{{ column.label }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for id, values in body %}
+                    <tr class="border-t border-base-200 dark:border-base-800">
+                        {% for value in values %}
+                        <td class="p-2 align-top">{% if forloop.first and editor %}<a class="underline" href="{{ id }}/">{{ value }}</a>{% else %}{{ value|default_if_none:"" }}{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                    {% empty %}
+                    <tr><td class="p-2" colspan="{{ columns|length }}">{% if search %}No rows match.{% else %}No rows yet.{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% if page.has_other_pages %}
+    <nav class="flex gap-4 items-center text-sm" aria-label="Pages">
+        {% if page.has_previous %}<a class="underline" href="?{% if search %}q={{ search|urlencode }}&amp;{% endif %}page={{ page.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="underline" href="?{% if search %}q={{ search|urlencode }}&amp;{% endif %}page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

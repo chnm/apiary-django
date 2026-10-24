@@ -95,7 +95,7 @@ class LiveTablesInDataModelsTests(LiveCase):
 
         one = self.client.get("/admin/apiary/change/tables/bom/letters/")
         self.assertEqual(one.status_code, 200)
-        self.assertEqual([t["name"] for t in one.context["tables"]], ["letters"])
+        self.assertEqual(one.context["table"], "letters")
         self.assertContains(one, "Death by Numbers · Letters")
         self.assertIn("subnavigationOpen': true", one.content.decode())
         self.assertNotIn("Live table", one.content.decode())

@@ -33,6 +33,7 @@ from unfold.widgets import (
 
 from . import changes, diffview, mcp_oauth, projectdata, sites
 from .projects import PROJECT_APPS, has_role, project_alias, project_models
+from .table_pages import TablePages
 from .models import APIToken, Change, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
 
 
@@ -708,40 +709,41 @@ class ChangeAdmin(SuperuserOnly, ModelAdmin):
         return self.decide(request, object_id, 'Revert', lambda change: changes.revert(change, request.user, via=self.VIA))
 
     def get_urls(self):
+        pages = TablePages(self.admin_site, {label: title for title, label in settings.PROJECTS})
+        view = self.admin_site.admin_view
         return [
-            path('tables/<slug:project>/', self.admin_site.admin_view(self.tables_view), name='apiary_project_tables'),
-            path('tables/<slug:project>/<slug:table>/', self.admin_site.admin_view(self.tables_view), name='apiary_project_table'),
+            path('tables/<slug:project>/', view(self.tables_view), name='apiary_project_tables'),
+            path('tables/<slug:project>/<slug:table>/', view(pages.rows), name='apiary_project_table'),
+            path('tables/<slug:project>/<slug:table>/add/', view(pages.edit), name='apiary_project_row_add'),
+            path('tables/<slug:project>/<slug:table>/<int:pk>/', view(pages.edit), name='apiary_project_row'),
+            path('tables/<slug:project>/<slug:table>/<int:pk>/delete/', view(pages.delete), name='apiary_project_row_delete'),
         ] + super().get_urls()
 
     TABLE_ROWS = 50
 
-    def tables_view(self, request, project, table=None):
-        """A project's tables (or one of them), their columns and first rows, for anyone with a role there."""
+    def tables_view(self, request, project):
+        """A project's tables, their columns and first rows, for anyone with a role there."""
         if project not in PROJECT_APPS:
             raise Http404
         if not has_role(request.user, project, 'viewer'):
             raise PermissionDenied
         alias = project_alias(project)
         tables = []
-        found = project_models(project)
-        if table is not None:
-            if table not in found:
-                raise Http404
-            found = {table: found[table]}
-        for name, model in found.items():
+        for name, model in project_models(project).items():
             fields = model._meta.concrete_fields
             rows = model._default_manager.using(alias).order_by('pk')
             tables.append({
                 'name': name,
                 'label': model._meta.verbose_name,
-                # Tables defined in code are edited on their own admin pages.
-                'edit_url': f'/admin/{project}/{name}/' if model._meta.apps is apps else None,
+                # Tables defined in code have their own admin pages.
+                'url': f'/admin/{project}/{name}/' if model._meta.apps is apps else
+                       reverse('admin:apiary_project_table', args=[project, name]),
                 'columns': [{'name': f.name, 'type': changes_type(f), 'required': not f.null} for f in fields],
                 'count': rows.count(),
                 'rows': [[f.value_from_object(obj) for f in fields] for obj in rows[:self.TABLE_ROWS]],
             })
         name = {label: title for title, label in settings.PROJECTS}.get(project, project)
-        heading = f"{name} · {str(found[table]._meta.verbose_name_plural).capitalize()}" if table else f"{name} · Data Models"
+        heading = f"{name} · Data Models"
         return TemplateResponse(request, 'admin/apiary/tables.html', {
             # No opts: Unfold would head the page with the Changes admin it hangs off.
             **self.admin_site.each_context(request), 'title': heading, 'content_title': heading,
