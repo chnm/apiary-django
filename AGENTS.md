@@ -242,6 +242,8 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 - Auth: `Authorization: Bearer <token>`, either an OAuth access token or an
   `APIToken` (`apiary/models.py`) that superusers create and revoke in the
   admin (API Tokens; shown once). Only SHA-256 digests of tokens are stored.
+  New tokens expire after 90 days unless the creator picks 30 days, a year or
+  "Never expires" (for unattended clients); an expired token gets a 401.
 - Scopes (`mcp_oauth.SCOPES`): `mcp:read` reads every project; `mcp:write`
   changes records (as the user's role allows) and publishes sites (staff);
   `mcp:schema` changes tables (project admins). OAuth users grant them on the

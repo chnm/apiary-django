@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.core.files.storage import storages
 import json
+from datetime import timedelta
 import tempfile
 
 from django.apps import apps
@@ -61,6 +62,13 @@ class ProjectAdmin(ModelAdmin):
 
 
 class APITokenForm(forms.ModelForm):
+    # Tokens expire unless someone chooses otherwise: a forgotten token stops working by itself.
+    LIFETIMES = {'30': timedelta(days=30), '90': timedelta(days=90), '365': timedelta(days=365), 'never': None}
+    valid_for = forms.ChoiceField(
+        choices=[('30', '30 days'), ('90', '90 days'), ('365', '1 year'), ('never', 'Never expires')],
+        initial='90', widget=UnfoldAdminSelectWidget,
+        help_text='"Never expires" is for unattended clients (scheduled jobs, servers) that cannot be given a new '
+                  'token in time; revoke it when they stop using it. People use OAuth instead of tokens.')
     scopes = forms.MultipleChoiceField(
         choices=[(name, f"{text} ({name})") for name, text in mcp_oauth.SCOPES.items()],
         initial=["mcp:read"], widget=UnfoldAdminCheckboxSelectMultipleWidget,
@@ -68,10 +76,15 @@ class APITokenForm(forms.ModelForm):
 
     class Meta:
         model = APIToken
-        fields = ['user', 'name', 'expires_at', 'scopes']
+        fields = ['user', 'name', 'valid_for', 'scopes']
 
     def clean_scopes(self):
         return mcp_oauth.granted_scopes(self.cleaned_data['scopes'])
+
+    def save(self, commit=True):
+        lifetime = self.LIFETIMES[self.cleaned_data['valid_for']]
+        self.instance.expires_at = timezone.now() + lifetime if lifetime else None
+        return super().save(commit)
 
 
 @admin.register(APIToken)
@@ -93,7 +106,7 @@ class APITokenAdmin(ModelAdmin):
 
     def get_fields(self, request, obj=None):
         if obj is None:
-            return ['user', 'name', 'expires_at', 'scopes']
+            return ['user', 'name', 'valid_for', 'scopes']
         return ['user', 'name', 'hint', 'scopes', 'created_at', 'expires_at', 'last_used_at', 'revoked_at']
 
     def get_readonly_fields(self, request, obj=None):
