@@ -53,7 +53,9 @@ configMapGenerator:
 # copies the BOM and Pinkertons SQLite files with SQLite's online backup API,
 # checked with integrity_check, using the app's own image. The app keeps
 # them in WAL mode, which a reader opens only with the -shm file writable:
-# read-write mount, and only read. The copies go back to a rollback journal
+# read-write mount (the volume too: a read-only volume makes every mount of it
+# read-only, and the backup fails whenever the app has no -shm open), and only
+# read. The copies go back to a rollback journal
 # so a read-only mount (the restore check) can open them; the app turns WAL
 # on again.
 #
@@ -206,7 +208,7 @@ patches:
                     - { name: dump, mountPath: /dump }
               volumes:
                 - name: sqlite
-                  persistentVolumeClaim: { claimName: sqlite, readOnly: true }
+                  persistentVolumeClaim: { claimName: sqlite }
                 - name: dump
                   emptyDir: { sizeLimit: 8Gi }
   target:
