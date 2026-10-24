@@ -215,8 +215,12 @@ and after). Never pruned.
 - Admin > Changes (superusers): review, apply, reject, revert. Each project's
   sidebar section has Data Models, for anyone with a role there: All tables
   (`/admin/apiary/change/tables/<project>/`), then each table, live ones on
-  their own page (`.../<project>/<table>/`) and ones in code on their admin
-  pages. People never see which is which. The sidebar is built per request
+  their own page (`.../<project>/<table>/`, `apiary/table_pages.py`) and ones
+  in code on their admin pages. People never see which is which. On a live
+  table's page anyone with a role searches and pages its rows, editors add and
+  edit rows, admins delete them; every save goes through `changes.py` (via
+  "admin", with an optional reason), so it is recorded and revertible like an
+  agent's. The sidebar is built per request
   (`navigation` in `settings_unfold.py`), since agents add tables any time.
 
 ### API

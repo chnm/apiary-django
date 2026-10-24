@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+{% load unfold %}
+
+{% block content %}
+<div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+    <form method="post" class="flex flex-col gap-4 p-4">
+        {% csrf_token %}
+        <p>Delete row {{ row.pk }} ({{ row }})? It is recorded under Changes and can be reverted from there.</p>
+        <div>
+            <label for="id_reason" class="block font-semibold mb-2">Why (shown under Changes)</label>
+            <input type="text" name="reason" id="id_reason"
+                   class="border border-base-200 bg-white px-3 py-2 rounded-default shadow-xs w-full max-w-2xl dark:bg-base-900 dark:border-base-700">
+        </div>
+        <div class="flex gap-4 items-center">
+            {% component "unfold/components/button.html" with submit=1 variant="danger" %}Delete{% endcomponent %}
+            <a class="underline" href="{{ back_url }}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
