@@ -1,0 +1,84 @@
+<style>
+    .diff-old { background: rgba(239, 68, 68, .14); }
+    .diff-new { background: rgba(34, 197, 94, .16); }
+    .diff-mark-old { background: rgba(239, 68, 68, .35); border-radius: 2px; text-decoration: line-through; }
+    .diff-mark-new { background: rgba(34, 197, 94, .4); border-radius: 2px; }
+    .diff-space { opacity: .75; font-size: .8em; text-decoration: none; }
+    .diff-empty { font-style: italic; opacity: .6; }
+</style>
+<div class="flex flex-col gap-4 text-sm">
+    <p>
+        {% if diff.undoes and diff.applied %}This undid change #{{ diff.undoes }}, so it{% elif diff.applied %}This change{% else %}Applying this would{% endif %}
+        {% if diff.action == "create" %}{% if diff.applied %} added{% else %} add{% endif %} {{ diff.rows }} row{{ diff.rows|pluralize }} to
+        {% elif diff.action == "delete" %}{% if diff.applied %} removed{% else %} remove{% endif %} {{ diff.rows }} row{{ diff.rows|pluralize }} from
+        {% else %}{% if diff.applied %} changed{% else %} change{% endif %} {{ diff.rows }} row{{ diff.rows|pluralize }} in
+        {% endif %}<strong>{{ diff.table }}</strong>.
+    </p>
+
+    {% if diff.summary and diff.rows > 1 %}
+    <section class="border border-base-200 rounded-default dark:border-base-800">
+        <h3 class="font-semibold p-3 border-b border-base-200 dark:border-base-800">In short</h3>
+        <table class="w-full">
+            <thead><tr><th class="text-left p-2">Field</th><th class="text-left p-2">Before</th><th class="text-left p-2">After</th><th class="text-right p-2">Rows</th></tr></thead>
+            <tbody>
+            {% for move in diff.summary %}
+            <tr class="border-t border-base-200 dark:border-base-800">
+                <td class="p-2 align-top">{% ifchanged move.column %}{{ move.name }}{% endifchanged %}</td>
+                {% if move.other %}
+                <td class="p-2 diff-empty" colspan="2">and {{ move.other }} other value{{ move.other|pluralize }}</td>
+                {% else %}
+                <td class="p-2 align-top diff-old">{% include "admin/apiary/change_diff_value.html" with value=move.before %}</td>
+                <td class="p-2 align-top diff-new">{% include "admin/apiary/change_diff_value.html" with value=move.after %}</td>
+                {% endif %}
+                <td class="p-2 align-top text-right">{{ move.rows }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    {% if diff.summary and diff.rows > 1 %}
+    <details>
+        <summary class="cursor-pointer underline mb-4">See each row{% if diff.more_rows %} (the first {{ diff.items|length }}){% endif %}</summary>
+    {% endif %}
+    {% for row in diff.items %}
+    <section class="mb-4 border border-base-200 rounded-default dark:border-base-800">
+        <h3 class="font-semibold p-3 border-b border-base-200 dark:border-base-800">
+            {% if diff.action == "create" %}New row{% if row.id %} {{ row.id }}{% endif %}{% elif diff.action == "delete" %}Removed row {{ row.id }}{% else %}Row {{ row.id }}{% endif %}{% if row.label %} <span class="font-normal">· {{ row.label }}</span>{% endif %}
+        </h3>
+        <table class="w-full table-fixed">
+            <thead><tr>
+                <th class="text-left p-2 w-1/5">Field</th>
+                {% if diff.action != "create" %}<th class="text-left p-2">{% if diff.action == "delete" %}Removed{% else %}Before{% endif %}</th>{% endif %}
+                {% if diff.action != "delete" %}<th class="text-left p-2">{% if diff.action == "create" %}Added{% else %}After{% endif %}</th>{% endif %}
+            </tr></thead>
+            <tbody>
+            {% for field in row.fields %}
+            <tr class="border-t border-base-200 dark:border-base-800">
+                <td class="p-2 align-top">{{ field.name }}</td>
+                {% if diff.action != "create" %}<td class="p-2 align-top break-words{% if diff.action == 'update' %} diff-old{% endif %}">{% include "admin/apiary/change_diff_value.html" with value=field.before old=True %}</td>{% endif %}
+                {% if diff.action != "delete" %}<td class="p-2 align-top break-words{% if diff.action == 'update' %} diff-new{% endif %}">{% include "admin/apiary/change_diff_value.html" with value=field.after new=True %}</td>{% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if row.unchanged %}
+        <details class="p-3 border-t border-base-200 dark:border-base-800">
+            <summary class="cursor-pointer underline">{{ row.unchanged|length }} {% if diff.action == "update" %}field{{ row.unchanged|pluralize }} that did not change{% else %}empty field{{ row.unchanged|pluralize }}{% endif %}</summary>
+            <table class="w-full table-fixed mt-2">
+                {% for field in row.unchanged %}
+                <tr><td class="p-2 align-top w-1/5">{{ field.name }}</td><td class="p-2 align-top break-words">{% if diff.action == "delete" %}{% include "admin/apiary/change_diff_value.html" with value=field.before %}{% else %}{% include "admin/apiary/change_diff_value.html" with value=field.after %}{% endif %}</td></tr>
+                {% endfor %}
+            </table>
+        </details>
+        {% endif %}
+    </section>
+    {% endfor %}
+    {% if diff.summary and diff.rows > 1 %}</details>{% endif %}
+
+    {% if diff.spaces %}<p class="diff-empty">␣ marks a space at the start or end of a value, which is otherwise invisible.</p>{% endif %}
+    {% if diff.more_rows %}
+    <p>{{ diff.more_rows }} more row{{ diff.more_rows|pluralize }} not shown one by one{% if diff.summary %}; "In short" above covers every row{% endif %}.</p>
+    {% endif %}
+</div>

@@ -207,6 +207,11 @@ and after). Never pruned.
 - Tables: always a proposal (reason required), applied with `apply`, which
   refuses if the schema moved since and snapshots the project first, so
   restoring that snapshot undoes it.
+- `changes.diff` shows a records change side by side, each row before and
+  after, and short however big: per column, how many rows went from which
+  value to which, then the first 50 rows. Admin > Changes renders it for
+  people (`apiary/diffview.py`); MCP change results carry a compact copy
+  (10 rows; `list_changes` only the summary).
 - Admin > Changes (superusers): review, apply, reject, revert. Each project's
   sidebar section links its Tables page (`/admin/apiary/change/tables/<project>/`,
   for anyone with a role there) and its changes.
