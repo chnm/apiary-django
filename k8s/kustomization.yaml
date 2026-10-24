@@ -319,5 +319,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/apiary-django
-- digest: sha256:9e8f9e097ecbc9a0864fedade3ea9d166b439657214eddba1b88dce709466812
+- digest: sha256:2603f0e005613486197fa347fc1a3fa6e895c63fc211de94c215cfe49bd06706
   name: oci.rrchnm.internal/rrchnm/apiary-django
