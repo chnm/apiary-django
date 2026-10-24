@@ -4,6 +4,7 @@
 <div>
     <p>Token <strong>{{ token.name }}</strong> for <strong>{{ token.user }}</strong> was created.</p>
     <p><strong>Copy it now. It is not stored and will not be shown again.</strong></p>
+    <p>{% if token.expires_at %}It stops working on {{ token.expires_at|date:"N j, Y, P" }}; make a new one before then.{% else %}It never expires: revoke it when it is no longer used.{% endif %}</p>
     <p><input type="text" readonly value="{{ secret }}" size="60" aria-label="API token" onfocus="this.select()"></p>
     <p>Give it to the AI agent as a bearer token for the MCP server at <code>{{ mcp_url }}</code>:</p>
     <pre>Authorization: Bearer {{ secret }}</pre>

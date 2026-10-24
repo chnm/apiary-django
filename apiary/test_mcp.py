@@ -218,7 +218,7 @@ class ApiTokenAdminTests(TestCase):
     def test_superuser_creates_a_token_shown_once_and_stored_as_a_digest(self):
         self.client.force_login(self.admin)
         response = self.client.post("/admin/apiary/apitoken/add/", {"user": self.owner.pk, "name": "laptop agent",
-                                                                     "scopes": ["mcp:write"]})
+                                                                     "valid_for": "90", "scopes": ["mcp:write"]})
         self.assertEqual(response.status_code, 200)
         token = APIToken.objects.get()
         secret = response.context["secret"]
@@ -228,9 +228,21 @@ class ApiTokenAdminTests(TestCase):
         self.assertNotIn(secret, json.dumps([token.name, token.hint, token.digest]))
         self.assertEqual(APIToken.authenticate(secret), token)
         self.assertEqual(token.scopes, ["mcp:read", "mcp:write"])
+        self.assertAlmostEqual(token.expires_at, timezone.now() + timedelta(days=90), delta=timedelta(minutes=1))
+        self.assertContains(response, "It stops working on")
 
         changelist = self.client.get("/admin/apiary/apitoken/")
         self.assertNotContains(changelist, secret)
+
+    def test_tokens_expire_by_default_and_never_only_when_chosen(self):
+        self.client.force_login(self.admin)
+        form = self.client.get("/admin/apiary/apitoken/add/")
+        self.assertContains(form, '<option value="90" selected>90 days</option>', html=True)
+
+        response = self.client.post("/admin/apiary/apitoken/add/", {"user": self.owner.pk, "name": "nightly export",
+                                                                     "valid_for": "never", "scopes": ["mcp:read"]})
+        self.assertIsNone(APIToken.objects.get(name="nightly export").expires_at)
+        self.assertContains(response, "It never expires")
 
     def test_revoke_action(self):
         token, secret = issue(self.owner)
