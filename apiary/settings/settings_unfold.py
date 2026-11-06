@@ -31,7 +31,7 @@ def listed(path, project=None):
 
 # Each project's sidebar section: Data Models, Unfold's collapsible list (open
 # on any of its pages) of the project's tables page and every table it has,
-# then its change history, sites and data snapshots. Agents add
+# then its change history and data snapshots. Agents add
 # tables at any time over MCP, so the sections are built per request. Links
 # are plain strings: Unfold marks an item active only when its link is one.
 PROJECTS = [
@@ -90,8 +90,6 @@ def project_section(request, title, label):
         data_models,
         {"title": "Changes", "icon": "history", "link": f"/admin/apiary/change/?project__exact={label}",
          "active": listed("/admin/apiary/change/", label), "permission": superuser},
-        {"title": "Sites", "icon": "web", "link": f"/admin/apiary/site/?project__exact={label}",
-         "active": listed("/admin/apiary/site/", label), "permission": superuser},
         {"title": "Data Snapshots", "icon": "backup", "link": f"/admin/apiary/datasnapshot/?project__exact={label}",
          "active": listed("/admin/apiary/datasnapshot/", label), "permission": superuser},
     ]}
@@ -247,13 +245,6 @@ UNFOLD = {
                         "icon": "backup",
                         "link": "/admin/apiary/datasnapshot/",
                         "active": listed("/admin/apiary/datasnapshot/"),
-                        "permission": lambda request: request.user.is_superuser,
-                    },
-                    {
-                        "title": "Sites (all projects)",
-                        "icon": "web",
-                        "link": "/admin/apiary/site/",
-                        "active": listed("/admin/apiary/site/"),
                         "permission": lambda request: request.user.is_superuser,
                     },
                     {

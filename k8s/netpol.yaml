@@ -7,8 +7,8 @@ metadata:
   name: external-services
   annotations: { argocd.argoproj.io/sync-wave: "-2" }
 spec:
-  # Also the migrate Job (data migrations can touch object storage: 0006 moves
-  # site files), the nightly backup (it copies the bucket into restic) and the
+  # Also the migrate Job (data migrations can touch object storage: 0009
+  # deletes the old site files), the nightly backup (it copies the bucket into restic) and the
   # parked restore Job (it uploads the bucket back). Without this egress their
   # storage calls hang until the Job's deadline.
   endpointSelector:

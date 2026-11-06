@@ -8,9 +8,8 @@ from apiary import projectdata
 
 class Command(BaseCommand):
     help = (
-        "Delete automatic data snapshots (before resets and restores, unused site "
-        "publish snapshots) past retention. Manual snapshots and those a site version was "
-        "built from are kept."
+        "Delete automatic data snapshots (before resets, restores and changes, and "
+        "those old site publishes took) past retention. Manual and imported snapshots are kept."
     )
 
     def add_arguments(self, parser):

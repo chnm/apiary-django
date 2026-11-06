@@ -73,10 +73,9 @@ class McpServerTests(TransactionTestCase):
     def test_records_use_and_offers_its_tools(self):
         tools = {tool["name"]: tool for tool in self.rpc("tools/list").json()["result"]["tools"]}
         self.assertEqual(set(tools), {
-            "list_projects", "query_records", "get_record", "aggregate", "list_changes", "list_sites",
+            "list_projects", "query_records", "get_record", "aggregate", "list_changes",
             "create_records", "update_records", "delete_records", "propose_table_change", "apply_change",
             "reject_change", "revert_change",
-            "create_site", "put_files", "delete_files", "publish_site", "rollback_site", "unpublish_site",
         })
         # Clients confirm before destructive tools.
         self.assertTrue(tools["query_records"]["annotations"]["readOnlyHint"])
@@ -261,9 +260,13 @@ class ApiTokenAdminTests(TestCase):
 
 
 class TransportSecurityTests(TestCase):
-    @override_settings(ALLOWED_HOSTS=["workspaces.test", ".sites.test"], SITES_DOMAIN="sites.test")
-    def test_site_hosts_do_not_switch_off_dns_rebinding_protection(self):
+    @override_settings(ALLOWED_HOSTS=["workspaces.test"])
+    def test_named_hosts_turn_on_dns_rebinding_protection(self):
         security = transport_security()
         self.assertTrue(security.enable_dns_rebinding_protection)
         self.assertEqual(security.allowed_hosts, ["workspaces.test", "workspaces.test:*"])
+
+    @override_settings(ALLOWED_HOSTS=["workspaces.test", ".example.test"])
+    def test_a_wildcard_host_turns_it_off(self):
+        self.assertFalse(transport_security().enable_dns_rebinding_protection)
 

@@ -10,11 +10,9 @@ Agents authenticate with a bearer token: an OAuth access token, which an MCP
 client gets with its user's approval (this app is the authorization server,
 apiary.mcp_oauth), or an APIToken from the admin. A token's scopes say what
 it may do: mcp:read reads every project, mcp:write changes records (as the
-user's project role allows, apiary.changes) and publishes sites (staff),
-mcp:schema changes live tables (apiary.live).
+user's project role allows, apiary.changes), mcp:schema changes live tables
+(apiary.live).
 """
-import base64
-import binascii
 import json
 import os
 from typing import Any, Literal
@@ -48,7 +46,7 @@ from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 from mcp.types import ToolAnnotations  # noqa: E402
 
-from apiary import changes, mcp_oauth, queries, sites  # noqa: E402
+from apiary import changes, mcp_oauth, queries  # noqa: E402
 from apiary.live.runtime import live_specs  # noqa: E402
 from apiary.models import APIToken, Change, OAuthClient  # noqa: E402
 from apiary.projects import (  # noqa: E402
@@ -264,9 +262,7 @@ mcp = MCPServer(
         "show the user and then apply_change. Every change is recorded (list_changes) and records "
         "changes can be undone with revert_change. With the schema scope, project admins change "
         "tables with propose_table_change (create, drop, rename tables; add, drop, rename, alter "
-        "columns), always a proposal: show its effects and SQL, then apply_change. Staff can also "
-        "publish static sites, each on its own host (<name>.sites.rrchnm.org): create_site, "
-        "put_files (index.html required), then publish_site. Sites are versioned: rollback_site restores one."
+        "columns), always a proposal: show its effects and SQL, then apply_change."
     ),
     auth_server_provider=OAuthProvider(),
     # The SDK serves the authorization server's metadata, /authorize, /token,
@@ -288,7 +284,7 @@ WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world
 DESTRUCTIVE = ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False)
 
 
-def current_user(scope="mcp:read", staff=False):
+def current_user(scope="mcp:read"):
     """The token's user, once the token has the scope."""
     from django.contrib.auth import get_user_model
 
@@ -300,8 +296,6 @@ def current_user(scope="mcp:read", staff=False):
     user = get_user_model().objects.filter(pk=token.subject, is_active=True).first()
     if user is None:
         raise ToolError("No active user for this token.")
-    if staff and not user.is_staff:
-        raise ToolError("Publishing sites needs a staff account.")
     return user
 
 
@@ -517,112 +511,13 @@ async def list_changes(project: str | None = None, status: str | None = None, li
     return await tool("mcp:read", run)()
 
 
-def site_tool(fn):
-    """Run fn(user, ...) for a staff user with the write scope, reporting site errors to the agent."""
-    def run(*args, **kwargs):
-        try:
-            return fn(current_user("mcp:write", staff=True), *args, **kwargs)
-        except sites.SiteError as error:
-            raise ToolError(str(error)) from error
-    return orm(run)
-
-
-@mcp.tool(annotations=READ)
-async def list_sites(project: str | None = None) -> dict:
-    """List the static sites, with their public URL, live version and versions."""
-    def run(user):
-        from apiary.models import Site
-
-        found = Site.objects.order_by("project", "name").prefetch_related("versions")
-        if project:
-            found = found.filter(project=project)
-        return {"sites": [sites.describe(site) for site in found]}
-    return await tool("mcp:read", run)()
-
-
-@mcp.tool(annotations=WRITE)
-async def create_site(project: str, name: str, title: str = "") -> dict:
-    """
-    Create an empty static site for a project, served at <name>.sites.rrchnm.org.
-    Names are unique across projects: lowercase letters, digits and inner
-    hyphens. Staff only.
-    """
-    def run(user):
-        return sites.describe(sites.create_site(project, name, title=title, user=user))
-    return await site_tool(run)()
-
-
-@mcp.tool(annotations=WRITE)
-async def put_files(project: str, site: str, files: list[dict[str, str]]) -> dict:
-    """
-    Add or replace files in the site's draft. Each file is {"path": "index.html",
-    "content": "..."}; add "encoding": "base64" for images and fonts. Paths are
-    relative (css/site.css). Allowed: html css js json csv txt md svg png jpg gif
-    webp ico woff2; 2 MB a file, 20 MB and 200 files a site. Staff only.
-    """
-    def run(user):
-        decoded = {}
-        for item in files:
-            if "path" not in item or "content" not in item:
-                raise sites.SiteError('Each file needs "path" and "content".')
-            try:
-                decoded[item["path"]] = (base64.b64decode(item["content"], validate=True)
-                                         if item.get("encoding") == "base64" else item["content"].encode())
-            except binascii.Error:
-                raise sites.SiteError(f"{item['path']!r}: content is not valid base64.")
-        version = sites.put_files(sites.get_site(project, site), decoded, user=user)
-        return {"draft_version": version.number, "files": sorted(version.files)}
-    return await site_tool(run)()
-
-
-@mcp.tool(annotations=DESTRUCTIVE)
-async def delete_files(project: str, site: str, paths: list[str]) -> dict:
-    """Remove files from the site's draft. Staff only."""
-    def run(user):
-        version = sites.delete_files(sites.get_site(project, site), paths, user=user)
-        return {"draft_version": version.number, "files": sorted(version.files)}
-    return await site_tool(run)()
-
-
-@mcp.tool(annotations=WRITE)
-async def publish_site(project: str, site: str) -> dict:
-    """Publish the draft: make it the live version. Returns the URL. Staff only."""
-    def run(user):
-        target = sites.get_site(project, site)
-        version = sites.publish(target, user=user)
-        return {"url": sites.site_url(target), "version": version.number, "files": sorted(version.files)}
-    return await site_tool(run)()
-
-
-@mcp.tool(annotations=WRITE)
-async def rollback_site(project: str, site: str, version: int) -> dict:
-    """Make an earlier published version live again. Staff only."""
-    def run(user):
-        target = sites.get_site(project, site)
-        sites.rollback(target, version)
-        return {"url": sites.site_url(target), "live_version": version}
-    return await site_tool(run)()
-
-
-@mcp.tool(annotations=DESTRUCTIVE)
-async def unpublish_site(project: str, site: str) -> dict:
-    """Take the site offline; its versions are kept. Staff only."""
-    def run(user):
-        target = sites.get_site(project, site)
-        sites.unpublish(target)
-        return {"url": sites.site_url(target), "live_version": None}
-    return await site_tool(run)()
-
-
 def transport_security():
     """
     Django's ALLOWED_HOSTS also guards the SDK's DNS-rebinding check. A
     wildcard there can't be expressed in the SDK's patterns; bearer auth
     still protects the endpoint.
     """
-    # The site hosts never serve /mcp: leave them out, or their wildcard would
-    # switch the check off.
-    hosts = [host for host in settings.ALLOWED_HOSTS if host != f".{settings.SITES_DOMAIN}"]
+    hosts = list(settings.ALLOWED_HOSTS)
     if not hosts or any(host == "*" or host.startswith(".") for host in hosts):
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(

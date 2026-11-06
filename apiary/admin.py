@@ -32,10 +32,10 @@ from unfold.widgets import (
     UnfoldAdminTextInputWidget,
 )
 
-from . import changes, diffview, mcp_oauth, projectdata, sites
+from . import changes, diffview, mcp_oauth, projectdata
 from .projects import PROJECT_APPS, has_role, project_alias, project_models
 from .table_pages import TablePages
-from .models import APIToken, Change, DataSnapshot, OAuthClient, OAuthToken, Project, Site, SiteVersion
+from .models import APIToken, Change, DataSnapshot, OAuthClient, OAuthToken, Project
 
 
 admin.site.unregister(User)
@@ -239,7 +239,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     list_filter = ['project', 'kind', 'created_at']
     search_fields = ['label']
     readonly_fields = ['key', 'project', 'kind', 'label', 'created_at', 'created_by',
-                       'row_counts', 'migrations', 'restorable', 'live_tables', 'sha256', 'size', 'used_by']
+                       'row_counts', 'migrations', 'restorable', 'live_tables', 'sha256', 'size']
     actions_list = ['take_snapshot', 'import_snapshot']
     actions_detail = ['explore', 'restore', 'export', 'download']
 
@@ -270,11 +270,6 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
     def live_tables(self, obj):
         # Restoring rebuilds these tables as they were.
         return ', '.join(f"{table['name']} ({len(table['columns'])} columns)" for table in obj.schema) or '-'
-
-    @admin.display(description='Site versions built from it')
-    def used_by(self, obj):
-        versions = SiteVersion.objects.filter(data_snapshot=obj).select_related('site')
-        return ', '.join(str(v) for v in versions) or '-'
 
     def delete_model(self, request, obj):
         projectdata.delete_snapshot(obj)
@@ -338,8 +333,7 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
         return self.page(request, 'datasnapshot/restore.html', f'Restore {snapshot.project} from snapshot #{snapshot.pk}',
                          snapshot=snapshot, form=form, compatible=compatible,
                          applied=applied,
-                         rows=[(t, snapshot.row_counts.get(t, 0), current.get(t, 0)) for t in tables],
-                         used_by=self.used_by(snapshot))
+                         rows=[(t, snapshot.row_counts.get(t, 0), current.get(t, 0)) for t in tables])
 
     EXPLORE_PAGE_SIZE = 100
 
@@ -434,218 +428,6 @@ class DataSnapshotAdmin(SuperuserOnly, ModelAdmin):
         snapshot = self.get_object(request, object_id)
         return FileResponse(storages['default'].open(snapshot.data_path, 'rb'), as_attachment=True,
                             filename=f'{snapshot.project}-snapshot-{snapshot.pk}.json.gz')
-
-
-class SiteVersionInline(admin.TabularInline):
-    model = SiteVersion
-    extra = 0
-    can_delete = False
-    fields = ['number', 'status', 'published_at', 'created_by', 'file_list', 'snapshot']
-    readonly_fields = fields
-
-    @admin.display(description='Status')
-    def status(self, obj):
-        if obj.site.live_version_id == obj.pk:
-            return 'live'
-        return 'published' if obj.published_at else 'draft'
-
-    @admin.display(description='Files')
-    def file_list(self, obj):
-        if not obj.files:
-            return '-'
-        return format_html('<br>'.join(['{} ({} B)'] * len(obj.files)),
-                           *[part for path, item in sorted(obj.files.items()) for part in (path, item['size'])])
-
-    @admin.display(description='Data snapshot')
-    def snapshot(self, obj):
-        if not obj.data_snapshot_id:
-            return '-'
-        url = reverse('admin:apiary_datasnapshot_change', args=[obj.data_snapshot_id])
-        return format_html('<a href="{}">#{}</a>', url, obj.data_snapshot_id)
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-
-class SiteForm(forms.ModelForm):
-    class Meta:
-        model = Site
-        fields = ['project', 'name', 'title']
-        widgets = {'project': UnfoldAdminSelectWidget(choices=[(p, p) for p in PROJECT_APPS])}
-
-    def clean(self):
-        cleaned = super().clean()
-        if self.instance.pk is None:  # the same checks as MCP's create_site
-            try:
-                sites.check_new_site(cleaned.get('project'), cleaned.get('name'))
-            except sites.SiteError as error:
-                raise forms.ValidationError(str(error))
-        return cleaned
-
-    def validate_unique(self):
-        # check_new_site reports a taken name, naming the site that has it.
-        pass
-
-
-class UploadForm(forms.Form):
-    archive = forms.FileField(label='Zip', widget=UnfoldAdminFileFieldWidget,
-                              help_text='Its files are added to the draft, replacing ones at the same paths. '
-                                        'A single top-level folder is stripped.')
-
-
-class RollbackForm(forms.Form):
-    version = forms.TypedChoiceField(coerce=int, widget=UnfoldAdminSelectWidget)
-
-    def __init__(self, *args, site, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['version'].choices = [
-            (v.number, f'v{v.number}, published {v.published_at:%Y-%m-%d %H:%M}'
-                       + (' (live)' if v.pk == site.live_version_id else ''))
-            for v in site.versions.filter(published_at__isnull=False)
-        ]
-
-
-@admin.register(Site)
-class SiteAdmin(SuperuserOnly, ModelAdmin):
-    """
-    Static sites, each on its own host (apiary.sites). Staff build them over MCP;
-    here superusers can also create one, upload a zip into its draft, publish,
-    roll back, unpublish and delete (with its files).
-    """
-    form = SiteForm
-    list_display = ['__str__', 'title', 'project', 'live', 'versions_count', 'link', 'created_by', 'created_at']
-    list_filter = ['project']
-    search_fields = ['name', 'title']
-    inlines = [SiteVersionInline]
-    actions = ['unpublish_selected']
-    actions_detail = ['open_site', 'upload', 'publish', 'rollback', 'unpublish']
-
-    def has_add_permission(self, request):
-        return self.has_module_permission(request)
-
-    def has_change_permission(self, request, obj=None):
-        return self.has_module_permission(request)
-
-    def get_inlines(self, request, obj):
-        return self.inlines if obj else []  # a new site has no versions yet
-
-    def get_fields(self, request, obj=None):
-        return ['project', 'name', 'title'] if obj is None else ['project', 'name', 'title', 'link', 'live_version',
-                                                                 'created_by', 'created_at']
-
-    def get_readonly_fields(self, request, obj=None):
-        return [] if obj is None else ['project', 'name', 'link', 'live_version', 'created_by', 'created_at']
-
-    def save_model(self, request, obj, form, change):
-        if not change:
-            obj.created_by = request.user
-        super().save_model(request, obj, form, change)
-
-    def get_deleted_objects(self, objs, request):
-        # List the publish snapshots too, so the confirmation shows all that goes.
-        deleted, counts, perms_needed, protected = super().get_deleted_objects(objs, request)
-        snapshots = [snapshot for site in objs for snapshot in sites.publish_snapshots(site)]
-        if snapshots:
-            deleted.append([f"Data snapshot (taken to publish it, with its files): {snapshot}"
-                            for snapshot in snapshots])
-            counts[DataSnapshot._meta.verbose_name_plural] = len(snapshots)
-        return deleted, counts, perms_needed, protected
-
-    def delete_model(self, request, obj):
-        sites.delete_site(obj)
-
-    def delete_queryset(self, request, queryset):
-        for site in queryset:
-            sites.delete_site(site)
-
-    @admin.display(description='Live version')
-    def live(self, obj):
-        return obj.live_version.number if obj.live_version else 'unpublished'
-
-    @admin.display(description='Versions')
-    def versions_count(self, obj):
-        return obj.versions.count()
-
-    @admin.display(description='URL')
-    def link(self, obj):
-        url = sites.site_url(obj)
-        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', url, url) if obj.live_version_id else url
-
-    @admin.action(description='Unpublish selected sites')
-    def unpublish_selected(self, request, queryset):
-        for site in queryset:
-            sites.unpublish(site)
-        self.message_user(request, f'Unpublished {queryset.count()} site(s).')
-
-    def page(self, request, title, **context):
-        return TemplateResponse(request, 'admin/apiary/form_page.html', {
-            **self.admin_site.each_context(request), 'opts': self.opts, 'title': title, **context,
-        })
-
-    def back(self, site):
-        return HttpResponseRedirect(reverse('admin:apiary_site_change', args=[site.pk]))
-
-    @action(description='Open site', url_path='open', icon='open_in_new', permissions=['superuser'])
-    def open_site(self, request, object_id):
-        return HttpResponseRedirect(sites.site_url(self.get_object(request, object_id)))
-
-    @action(description='Upload zip', url_path='upload', icon='upload', permissions=['superuser'])
-    def upload(self, request, object_id):
-        site = self.get_object(request, object_id)
-        form = UploadForm(request.POST or None, request.FILES or None)
-        if request.method == 'POST' and form.is_valid():
-            try:
-                version = sites.upload_zip(site, form.cleaned_data['archive'], user=request.user)
-            except sites.SiteError as error:
-                form.add_error('archive', str(error))
-            else:
-                self.message_user(request, f'Draft v{version.number} now holds {len(version.files)} files. '
-                                           'Publish to make it live.', messages.SUCCESS)
-                return self.back(site)
-        return self.page(request, f'Upload files to {site}', form=form, submit_label='Upload to draft',
-                         intro=f'Files go into the draft, which is not served until it is published. Allowed: '
-                               f'{", ".join(sorted(sites.CONTENT_TYPES))}; 2 MB a file, 20 MB a site.')
-
-    @action(description='Publish draft', url_path='publish', icon='publish', permissions=['superuser'])
-    def publish(self, request, object_id):
-        site = self.get_object(request, object_id)
-        # Detail actions are links: change state only on the confirming POST.
-        if request.method != 'POST':
-            draft = site.versions.filter(published_at__isnull=True).first()
-            return self.page(request, f'Publish {site}', form=forms.Form(), submit_label='Publish',
-                             intro=f'Publishes draft v{draft.number} ({len(draft.files)} files).'
-                             if draft else 'There is no draft; publishing starts one from the live version.')
-        try:
-            version = sites.publish(site, user=request.user)
-        except sites.SiteError as error:
-            self.message_user(request, str(error), messages.ERROR)
-        else:
-            self.message_user(request, f'Published v{version.number} at {sites.site_url(site)}', messages.SUCCESS)
-        return self.back(site)
-
-    @action(description='Roll back', url_path='rollback', icon='history', permissions=['superuser'])
-    def rollback(self, request, object_id):
-        site = self.get_object(request, object_id)
-        form = RollbackForm(request.POST or None, site=site)
-        if request.method == 'POST' and form.is_valid():
-            version = sites.rollback(site, form.cleaned_data['version'])
-            self.message_user(request, f'v{version.number} is live again.', messages.SUCCESS)
-            return self.back(site)
-        return self.page(request, f'Roll back {site}', form=form, submit_label='Make it live',
-                         intro='Serve an earlier published version. Versions never change, so this is instant '
-                               'and can itself be rolled back.')
-
-    @action(description='Unpublish', url_path='unpublish', icon='visibility_off', variant=ActionVariant.DANGER,
-            permissions=['superuser'])
-    def unpublish(self, request, object_id):
-        site = self.get_object(request, object_id)
-        if request.method != 'POST':
-            return self.page(request, f'Unpublish {site}', form=forms.Form(), submit_label='Unpublish',
-                             variant='danger', intro=f'Takes {sites.site_url(site)} offline. Its versions are '
-                                                     'kept; Roll back makes one live again.')
-        sites.unpublish(site)
-        self.message_user(request, f'{site} is offline; its versions are kept.', messages.SUCCESS)
-        return self.back(site)
 
 
 @admin.register(Change)

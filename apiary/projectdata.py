@@ -279,15 +279,14 @@ def prunable(*, keep, older_than):
     """
     Automatic snapshots past retention: beyond the newest `keep` of each
     project and older than `older_than` (a datetime). Manual snapshots are
-    never pruned, nor ones a site version was built from.
+    never pruned.
     """
-    from apiary.models import DataSnapshot, SiteVersion
+    from apiary.models import DataSnapshot
 
-    in_use = set(SiteVersion.objects.exclude(data_snapshot=None).values_list("data_snapshot", flat=True))
     candidates = []
     for project in PROJECT_APPS:
         automatic = DataSnapshot.objects.filter(project=project, kind__in=AUTOMATIC).order_by("-created_at")
-        candidates += [s for s in automatic[keep:] if s.created_at < older_than and s.pk not in in_use]
+        candidates += [s for s in automatic[keep:] if s.created_at < older_than]
     return candidates
 
 

@@ -23,7 +23,6 @@ configMapGenerator:
 - literals:
   - BOM_DB_PATH=/data/bom.sqlite3
   - PINKERTONS_DB_PATH=/data/pinkertons.sqlite3
-  - SITES_DOMAIN=sites.rrchnm.org
   - OBJ_STORAGE=True
   - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
   - OBJ_STORAGE_REGION=rrchnm
