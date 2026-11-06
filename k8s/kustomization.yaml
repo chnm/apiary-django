@@ -7,7 +7,6 @@ resources:
 - app-deploy.yaml
 - sqlite.yaml
 - mcp-route.yaml
-- sites-route.yaml
 - netpol.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
@@ -306,11 +305,6 @@ replacements:
     select:
       kind: HTTPRoute
       name: mcp-oauth
-  - fieldPaths:
-    - spec.parentRefs
-    select:
-      kind: HTTPRoute
-      name: sites
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
