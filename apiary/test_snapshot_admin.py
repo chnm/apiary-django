@@ -11,7 +11,7 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from apiary import projectdata
-from apiary.models import DataSnapshot, Site, SiteVersion
+from apiary.models import DataSnapshot
 from demo.models import MortalityBill
 
 ADMIN = "/admin/apiary/datasnapshot/"
@@ -100,22 +100,20 @@ class PruneTests(TestCase):
         DataSnapshot.objects.filter(pk=snapshot.pk).update(created_at=timezone.now() - timedelta(days=days_ago))
         return snapshot
 
-    def test_prunes_only_old_automatic_unused_snapshots(self):
+    def test_prunes_only_old_automatic_snapshots(self):
         manual = self.snapshot("manual", 90)
-        used = self.snapshot("site", 90)
-        site = Site.objects.create(project="demo", name="s")
-        SiteVersion.objects.create(site=site, number=1, data_snapshot=used)
-        old = [self.snapshot("pre-reset", 60 + i) for i in range(3)]
+        # Taken by site publishes before sites moved out: automatic, so pruned like the rest.
+        old = [self.snapshot("site", 90), *(self.snapshot("pre-reset", 60 + i) for i in range(3))]
         recent = self.snapshot("pre-restore", 1)
 
         out = StringIO()
         call_command("prune_snapshots", keep=1, days=30, stdout=out)
-        self.assertIn("Would delete 3 snapshot(s)", out.getvalue())
+        self.assertIn("Would delete 4 snapshot(s)", out.getvalue())
         self.assertEqual(DataSnapshot.objects.count(), 6)
 
         call_command("prune_snapshots", keep=1, days=30, mode="delete", stdout=StringIO())
-        # Kept: manual, the one a site version uses, and the newest automatic (keep=1).
-        self.assertEqual(set(DataSnapshot.objects.values_list("pk", flat=True)), {manual.pk, used.pk, recent.pk})
+        # Kept: manual and the newest automatic (keep=1).
+        self.assertEqual(set(DataSnapshot.objects.values_list("pk", flat=True)), {manual.pk, recent.pk})
         self.assertFalse(any(storages["default"].exists(s.data_path) for s in old))
 
 

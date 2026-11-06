@@ -51,7 +51,7 @@ class SidebarTests(TestCase):
         page = self.client.get("/admin/").content.decode()
         self.assertIn('href="/admin/apiary/change/tables/bom/"', page)
         self.assertNotIn('href="/admin/apiary/change/tables/relec/"', page)
-        self.assertNotIn("/admin/apiary/site/?project__exact=bom", page)  # Sites: superusers only
+        self.assertNotIn("/admin/apiary/datasnapshot/?project__exact=bom", page)  # Snapshots: superusers only
         self.assertEqual(self.client.get("/admin/apiary/change/tables/bom/").status_code, 200)
         self.assertEqual(self.client.get("/admin/apiary/change/tables/relec/").status_code, 403)
 
@@ -66,7 +66,7 @@ class SidebarTests(TestCase):
 
 
 class FilteredLinkTests(TestCase):
-    """Each project's Changes, Sites and Snapshots link the same list, filtered: only the shown project's lights up."""
+    """Each project's Changes and Snapshots link the same list, filtered: only the shown project's lights up."""
     databases = "__all__"
 
     def active(self, url):
@@ -74,12 +74,13 @@ class FilteredLinkTests(TestCase):
 
         self.client.force_login(User.objects.get_or_create(username="root", defaults={"is_superuser": True, "is_staff": True})[0])
         page = self.client.get(url).content.decode()
-        return {href for href, rest in re.findall(r'<a href="(/admin/apiary/(?:change|site|datasnapshot)/[^"]*)"([^>]*)>', page)
+        return {href for href, rest in re.findall(r'<a href="(/admin/apiary/(?:change|datasnapshot)/[^"]*)"([^>]*)>', page)
                 if "active" in rest}
 
     def test_only_the_filtered_projects_link_is_active(self):
         self.assertEqual(self.active("/admin/apiary/change/?project__exact=bom"), {"/admin/apiary/change/?project__exact=bom"})
-        self.assertEqual(self.active("/admin/apiary/site/?project__exact=relec"), {"/admin/apiary/site/?project__exact=relec"})
+        self.assertEqual(self.active("/admin/apiary/datasnapshot/?project__exact=relec"),
+                         {"/admin/apiary/datasnapshot/?project__exact=relec"})
         self.assertEqual(self.active("/admin/apiary/datasnapshot/"), {"/admin/apiary/datasnapshot/"})
         self.assertEqual(self.active("/admin/apiary/change/tables/bom/"), {"/admin/apiary/change/tables/bom/"})
 

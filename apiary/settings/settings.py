@@ -28,13 +28,6 @@ CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
-# Static sites (apiary.sites) are untrusted HTML, so each is served on its own
-# host, <name>.SITES_DOMAIN, never the app's. Empty disables them.
-SITES_DOMAIN = env("SITES_DOMAIN", default="")
-SITES_URL = env("SITES_URL", default="https://{name}.%s/" % SITES_DOMAIN)
-if SITES_DOMAIN:
-    ALLOWED_HOSTS = [*ALLOWED_HOSTS, f".{SITES_DOMAIN}"]
-
 # OAuth for MCP clients (apiary.mcp_oauth). The MCP container serves /mcp and
 # is the authorization server at MCP_URL; Django's login and consent page at
 # APP_URL approve each client. One host in k8s, two ports in Compose.
@@ -84,8 +77,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    # First, so every later middleware sees a site host's own URLconf.
-    "apiary.sites.SiteHostMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

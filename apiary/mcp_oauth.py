@@ -26,7 +26,7 @@ from apiary.models import OAuthClient, OAuthGrant, OAuthToken
 # What a token may do; the consent page lets the user grant each.
 SCOPES = {
     "mcp:read": "Read every project's tables and the change history",
-    "mcp:write": "Change records as your project roles allow, and publish sites",
+    "mcp:write": "Change records as your project roles allow",
     "mcp:schema": "Change table structure in projects you administer",
 }
 REDIRECT_URIS_MAX = 10

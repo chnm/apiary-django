@@ -235,7 +235,7 @@ Paginated with `limit`/`offset`.
 ### MCP for AI agents
 
 `/mcp` is an MCP server (`apiary/mcp_server.py`) on the official MCP SDK:
-read tools, change tools by scope and project role, site tools for staff. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
+read tools and change tools by scope and project role. It is an ASGI app under uvicorn, separate from Gunicorn so Django stays
 WSGI: a second container in the k8s app pod (it reads the node-local SQLite
 files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
 
@@ -245,8 +245,7 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
   New tokens expire after 90 days unless the creator picks 30 days, a year or
   "Never expires" (for unattended clients); an expired token gets a 401.
 - Scopes (`mcp_oauth.SCOPES`): `mcp:read` reads every project; `mcp:write`
-  changes records (as the user's role allows) and publishes sites (staff);
-  `mcp:schema` changes tables (project admins). OAuth users grant them on the
+  changes records (as the user's role allows); `mcp:schema` changes tables (project admins). OAuth users grant them on the
   consent page; API tokens get them in the admin. Tokens from before scopes
   keep read and write.
 - OAuth (`apiary/mcp_oauth.py`): the MCP container is the authorization
@@ -261,15 +260,12 @@ files), the `mcp` service on port 8001 in Compose. Stateless JSON transport.
   that registered but never connected are dropped after a day. The gateway
   routes those paths to the MCP container (`k8s/mcp-route.yaml`).
 - Read tools: `list_projects` (tables, columns, your role), `query_records`,
-  `get_record`, `aggregate`, `list_changes`, `list_sites`. Field paths are
+  `get_record`, `aggregate`, `list_changes`. Field paths are
   checked against the table's own project (`apiary/queries.py`), so filters
   cannot reach auth tables or another project.
 - Change tools (see Changes): `create_records`, `update_records`,
   `delete_records`, `propose_table_change`, `apply_change`, `reject_change`,
   `revert_change`. Tools carry MCP annotations (read-only, destructive).
-- Site tools (staff, write scope; see Sites): `create_site`, `put_files`,
-  `delete_files`, `publish_site`, `rollback_site`, `unpublish_site`. Errors
-  are `ToolError`s, so the agent sees why.
 - ORM calls run on asgiref's single sync thread and close their connections:
   outside Django's request cycle nothing else would.
 - The SDK's DNS-rebinding check uses `ALLOWED_HOSTS`.
@@ -308,7 +304,8 @@ plus `manifest.json` (format 2) in private storage under
   snapshots first) and `prune_snapshots` also run from `/apiary/mgmt/`.
   Pruning removes only automatic snapshots (before resets, restores and
   changes) past retention (newest 10 per project and the last 30 days kept),
-  never manual ones or those a site version was built from.
+  never manual or imported ones. Snapshots that site publishes took (kind
+  `site`) are automatic and prune the same way.
 
 ### Backups
 
@@ -316,14 +313,14 @@ A full teardown keeps only the remote restic repositories, so they hold
 everything. The nightly `postgres-backup` CronJob (k0s, 02:45 ET; patched in
 `k8s/kustomization.yaml`) fills `/dump`, which restic backs up whole:
 
-- PostgreSQL: `pg_dump` of every project schema, users, tokens, and the site
-  and snapshot index.
+- PostgreSQL: `pg_dump` of every project schema, users, tokens, and the
+  snapshot index.
 - SQLite: online-backup copies of `bom.sqlite3` and `pinkertons.sqlite3`,
   integrity-checked and switched from WAL to a rollback journal so a
   read-only mount can open them.
 - Object storage: the whole bucket (`python -m apiary.bucket dump`), with a
-  manifest of every key and size. That covers site files, snapshot files and
-  uploaded media.
+  manifest of every key and size. That covers snapshot files and uploaded
+  media.
 
 `k8s/restore.yaml` (parked, applied by hand) rehearses a restore: it checks the
 dump's schemas, the SQLite copies and the bucket copy against its manifest
@@ -333,28 +330,9 @@ object-storage egress (`k8s/netpol.yaml`).
 
 ### Sites
 
-A *site* is a static website (`Site`, `SiteVersion`); a *page* is one HTML
-file in it. Sites (`apiary/sites.py`) are each served on their own host,
-`<name>.SITES_DOMAIN` (`<name>.sites.rrchnm.org`; `<name>.sites.localhost:8000`
-in Compose), never the app's: `SiteHostMiddleware` gives those hosts their own
-URLconf (`apiary/sites_urls.py`), so neither the app nor another site shares
-their origin. Site names are therefore unique across projects, DNS labels, and
-not reserved (`check_new_site`, used by MCP and the admin alike). Pages are
-untrusted HTML, so they get the ADR 0050 headers for agent-written pages plus
-jsDelivr/cdnjs for scripts: the CSP sandbox gives them an opaque origin with no
-cookies.
-
-- Files live in private storage under `sites/<project>/<site key>/v<n>/`.
-  Tools write into the draft version; published versions never change, and
-  rolling back points the site at an earlier one.
-- Data a page shows is written into the site as files (JSON, CSV). Versions
-  published when sites still froze datasets keep the snapshot they read.
-- Limits: 2 MB a file, 200 files and 20 MB a site, a fixed list of file types.
-- Admin > Sites (superusers; each project's sidebar section links its own):
-  create a site, upload a zip into its draft (put_files' checks; a single
-  top folder is stripped), publish, roll back, unpublish (both confirm on
-  POST), and delete with its files and the snapshots taken to publish it
-  (kind `site`, unless another site's version uses one).
+Static sites moved out: rrchnm-systems/mcp-sites-publisher publishes them on
+`<name>.sites.rrchnm.org`. Migration 0009 dropped Apiary's `Site` and
+`SiteVersion` tables and deleted their files.
 
 ### Model Architecture
 
