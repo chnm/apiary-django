@@ -13,10 +13,10 @@ resources:
 # Pinned by commit; bump every ref together. Media lives in Garage, so no
 # media component.
 components:
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/developer-refresh?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=1ffd70a95b72d221154774089055cfec398f4e84
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=1ffd70a95b72d221154774089055cfec398f4e84
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=1ffd70a95b72d221154774089055cfec398f4e84
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/developer-refresh?ref=1ffd70a95b72d221154774089055cfec398f4e84
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
 configMapGenerator:
